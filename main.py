@@ -7,7 +7,7 @@ from io import BytesIO
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher.filters import Command
-from aiogram.dispatcher.filters import BoundFilter # НОВОЕ: Импорт для создания кастомного фильтра
+from aiogram.dispatcher.filters import BoundFilter # Импорт для создания кастомного фильтра
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -38,7 +38,7 @@ BATCH_TEXT_PATTERN = re.compile(r'(yandex|whoosh|jet)\s+(\d+)', re.IGNORECASE)
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot) 
 
-# --- КЛАСС ФИЛЬТРА ДЛЯ АДМИНОВ (НОВОЕ) ---
+# --- КЛАСС ФИЛЬТРА ДЛЯ АДМИНОВ ---
 class IsAdminFilter(BoundFilter):
     key = 'is_admin'
 
@@ -46,6 +46,7 @@ class IsAdminFilter(BoundFilter):
         self.is_admin = is_admin
 
     async def check(self, message: types.Message):
+        # Этот фильтр работает для любого типа сообщения, где нужно проверить ID пользователя
         return message.from_user.id in ADMIN_IDS
 
 # Регистрация фильтра
@@ -148,7 +149,6 @@ async def batch_accept_handler(message: types.Message) -> None:
         parse_mode=types.ParseMode.HTML
     )
 
-# Изменение: Использование кастомного фильтра is_admin=True
 @dp.message_handler(commands=['today_stats'], is_admin=True)
 async def admin_today_stats_handler(message: types.Message) -> None:
     records = get_scooter_records(date_filter='today')
@@ -198,7 +198,7 @@ async def admin_today_stats_handler(message: types.Message) -> None:
     
     await message.answer(final_response, parse_mode=types.ParseMode.HTML)
 
-# Изменение: Использование кастомного фильтра is_admin=True
+
 @dp.message_handler(commands=['export_today_excel'], is_admin=True)
 async def admin_export_today_excel_handler(message: types.Message) -> None:
     await message.answer("Формирую отчет за сегодня, пожалуйста, подождите...", parse_mode=types.ParseMode.HTML)
@@ -212,7 +212,6 @@ async def admin_export_today_excel_handler(message: types.Message) -> None:
     await bot.send_document(chat_id=message.chat.id, document=types.InputFile(excel_file, filename=filename))
     await message.answer("Отчет за сегодня готов.", parse_mode=types.ParseMode.HTML)
 
-# Изменение: Использование кастомного фильтра is_admin=True
 @dp.message_handler(commands=['export_all_excel'], is_admin=True)
 async def admin_export_all_excel_handler(message: types.Message) -> None:
     await message.answer("Формирую полный отчет, пожалуйста, подождите...", parse_mode=types.ParseMode.HTML)
@@ -225,6 +224,7 @@ async def admin_export_all_excel_handler(message: types.Message) -> None:
     filename = f"full_report_{datetime.date.today().isoformat()}.xlsx"
     await bot.send_document(chat_id=message.chat.id, document=types.InputFile(excel_file, filename=filename))
     await message.answer("Полный отчет готов.", parse_mode=types.ParseMode.HTML)
+
 
 def create_excel_report(records, sheet_name):
     wb = Workbook()
@@ -259,9 +259,11 @@ def create_excel_report(records, sheet_name):
     buffer.seek(0)
     return buffer
 
-@dp.message_handler(content_types=types.ContentType.TEXT)
+# Изменение: Добавление content_types для обработки подписей к медиафайлам
+@dp.message_handler(content_types=[types.ContentType.TEXT, types.ContentType.PHOTO, types.ContentType.DOCUMENT, types.ContentType.VIDEO, types.ContentType.ANIMATION])
 async def handle_all_messages(message: types.Message) -> None:
-    text_to_check = message.text
+    # Проверяем message.text для обычных сообщений и message.caption для подписей
+    text_to_check = message.text if message.text else message.caption
 
     if not text_to_check or not text_to_check.strip(): 
         return 
@@ -343,4 +345,4 @@ async def main() -> None:
     print("Бот остановлен.")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main()
