@@ -7,8 +7,7 @@ from io import BytesIO
 
 # Изменения для aiogram 2.x
 from aiogram import Bot, Dispatcher, types
-from aiogram.contrib.fsm_storage.memory import MemoryStorage # Если нужна FSM, иначе можно не импортировать
-from aiogram.dispatcher.filters import Command # Для обработки команд
+from aiogram.dispatcher.filters import Command
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -33,15 +32,13 @@ YANDEX_SCOOTER_PATTERN = re.compile(r'\b\d{8}\b')
 WOOSH_SCOOTER_PATTERN = re.compile(r'\b[A-Z]{2}\d{4}\b', re.IGNORECASE)
 JET_SCOOTER_PATTERN = re.compile(r'\b\d{6}\b')
 
-# НОВОЕ: Регулярное выражение для распознавания пакетных записей в свободном тексте
+# Регулярное выражение для распознавания пакетных записей в свободном тексте
 BATCH_TEXT_PATTERN = re.compile(r'(yandex|whoosh|jet)\s+(\d+)', re.IGNORECASE)
 
 # --- ИНИЦИАЛИЗАЦИЯ ---
-# Изменение: для aiogram 2.x parse_mode задается в Dispatcher
 bot = Bot(token=BOT_TOKEN)
-storage = MemoryStorage() # Используем MemoryStorage, если FSM не нужна, можно просто dp = Dispatcher(bot)
-dp = Dispatcher(bot, storage=storage) # Изменение: parse_mode убран из Bot, добавляется при отправке или в Middlewares
-# Для глобального parse_mode в aiogram 2.x часто используют middleware или явно указывают в send_message
+# Изменение: storage убран, так как MemoryStorage больше не импортируется
+dp = Dispatcher(bot) 
 
 # --- ФУНКЦИИ БАЗЫ ДАННЫХ ---
 def init_db():
@@ -87,21 +84,13 @@ def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
 # --- ОБРАБОТЧИКИ СООБЩЕНИЙ ---
-
-# Изменение: CommandStart и Command используются из aiogram.dispatcher.filters
-@dp.message_handler(commands=['start']) # Изменение: @dp.message_handler вместо @dp.message
+@dp.message_handler(commands=['start'])
 async def command_start_handler(message: types.Message) -> None:
-    # Изменение: parse_mode указывается явно
     await message.answer(f"Привет, {message.from_user.full_name}! Я готов принимать самокаты.", parse_mode=types.ParseMode.HTML)
 
-# --- КОМАНДА ДЛЯ ПАКЕТНОЙ СДАЧИ ---
-# Изменение: @dp.message_handler и как обрабатывать аргументы
 @dp.message_handler(commands=['batch_accept'])
-async def batch_accept_handler(message: types.Message) -> None: # Изменение: CommandObject не нужен
-    """
-    Принимает пакетную сдачу самокатов: /batch_accept <сервис> <количество>
-    """
-    args = message.get_args().split() # Изменение: message.get_args() для получения аргументов
+async def batch_accept_handler(message: types.Message) -> None:
+    args = message.get_args().split()
     if len(args) != 2:
         await message.reply("Используйте команду в формате: /batch_accept <сервис> <количество>\nНапример: /batch_accept Yandex 20", parse_mode=types.ParseMode.HTML)
         return
@@ -152,9 +141,6 @@ async def batch_accept_handler(message: types.Message) -> None: # Изменен
         parse_mode=types.ParseMode.HTML
     )
 
-
-# --- КОМАНДЫ АДМИНИСТРАТОРА ---
-# Изменение: @dp.message_handler и лямбда-функция для фильтрации админов
 @dp.message_handler(commands=['today_stats'], func=lambda message: is_admin(message.from_user.id))
 async def admin_today_stats_handler(message: types.Message) -> None:
     records = get_scooter_records(date_filter='today')
@@ -215,7 +201,6 @@ async def admin_export_today_excel_handler(message: types.Message) -> None:
 
     excel_file = create_excel_report(records, "Отчет за сегодня")
     filename = f"report_today_{datetime.date.today().isoformat()}.xlsx"
-    # Изменение: send_document вместо answer_document
     await bot.send_document(chat_id=message.chat.id, document=types.InputFile(excel_file, filename=filename))
     await message.answer("Отчет за сегодня готов.", parse_mode=types.ParseMode.HTML)
 
@@ -229,7 +214,6 @@ async def admin_export_all_excel_handler(message: types.Message) -> None:
 
     excel_file = create_excel_report(records, "Полный отчет")
     filename = f"full_report_{datetime.date.today().isoformat()}.xlsx"
-    # Изменение: send_document вместо answer_document
     await bot.send_document(chat_id=message.chat.id, document=types.InputFile(excel_file, filename=filename))
     await message.answer("Полный отчет готов.", parse_mode=types.ParseMode.HTML)
 
@@ -267,11 +251,9 @@ def create_excel_report(records, sheet_name):
     buffer.seek(0)
     return buffer
 
-
-# Изменение: @dp.message_handler без фильтров, ловит все текстовые сообщения
 @dp.message_handler(content_types=types.ContentType.TEXT)
 async def handle_all_messages(message: types.Message) -> None:
-    text_to_check = message.text # Изменение: message.text содержит весь текст
+    text_to_check = message.text
 
     if not text_to_check or not text_to_check.strip(): 
         return 
@@ -289,7 +271,6 @@ async def handle_all_messages(message: types.Message) -> None:
     total_accepted_from_user = 0
     accepted_by_service = {"Яндекс": 0, "Whoosh": 0, "Jet": 0}
 
-    # --- 1. Обработка ИНДИВИДУАЛЬНЫХ номеров самокатов ---
     yandex_numbers = YANDEX_SCOOTER_PATTERN.findall(text_to_check)
     for num in yandex_numbers:
         insert_scooter_record(num, "Яндекс", user_id, username, fullname)
@@ -308,9 +289,8 @@ async def handle_all_messages(message: types.Message) -> None:
         accepted_by_service["Jet"] += 1
         total_accepted_from_user += 1
 
-    # --- 2. Обработка ПАКЕТНЫХ записей из текста ---
     batch_text_matches = BATCH_TEXT_PATTERN.findall(text_to_check)
-    timestamp_now = datetime.datetime.now().strftime("%Y%m%d%H%M%S") 
+    timestamp_now = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
     for match in batch_text_matches:
         service_raw = match[0].lower()
@@ -329,7 +309,6 @@ async def handle_all_messages(message: types.Message) -> None:
         except ValueError:
             pass 
             
-    # --- Формирование ответа ---
     if total_accepted_from_user > 0:
         response_parts = []
         user_mention_text = message.from_user.full_name
@@ -347,15 +326,14 @@ async def handle_all_messages(message: types.Message) -> None:
                 response_parts.append(f"{service_name}: {count}")
         
         final_response = "\n".join(response_parts)
-        await message.reply(final_response, parse_mode=types.ParseMode.HTML) # Изменение: явно указываем parse_mode
-
+        await message.reply(final_response, parse_mode=types.ParseMode.HTML)
 
 # --- ЗАПУСК БОТА ---
 async def main() -> None:
     init_db()
     print("Бот запускается...")
     # Изменение: dp.start_polling для aiogram 2.x
-    await dp.start_polling() # bot не передается в start_polling в aiogram 2.x, он уже в Dispatcher
+    await dp.start_polling()
     print("Бот остановлен.")
 
 if __name__ == "__main__":
