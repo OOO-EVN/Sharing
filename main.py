@@ -4,7 +4,7 @@ import os
 import sqlite3
 import datetime
 from io import BytesIO
-import pytz # НОВОЕ: Импорт для работы с часовыми поясами
+import pytz
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher.filters import Command
@@ -25,10 +25,18 @@ ADMIN_IDS = [int(admin_id) for admin_id in os.getenv('ADMIN_IDS', '').split(',')
 if not ADMIN_IDS:
     print("Внимание: ADMIN_IDS не заданы в .env файле. Пожалуйста, добавьте ID администраторов.")
 
+# НОВОЕ: Разрешенные ID чатов/групп. Можно указать несколько, разделенных запятыми.
+# Например: ALLOWED_CHAT_IDS=-1001234567890,-1009876543210
+# Чтобы узнать ID группы, временно добавьте бота в группу, и отправьте /start,
+# в ответе бота на команду /start будет message.chat.id
+ALLOWED_CHAT_IDS = [int(chat_id) for chat_id in os.getenv('ALLOWED_CHAT_IDS', '').split(',') if chat_id.strip()]
+if not ALLOWED_CHAT_IDS:
+    print("Внимание: ALLOWED_CHAT_IDS не заданы в .env файле. Бот будет работать только в личке с админами.")
+
+
 DB_NAME = 'scooters.db'
 
 # Часовой пояс для Алматы (Казахстан). UTC+5
-# Убедитесь, что 'Asia/Almaty' является правильным идентификатором для pytz
 TIMEZONE = pytz.timezone('Asia/Almaty') 
 
 # Регулярные выражения для определения сервиса:
@@ -53,8 +61,23 @@ class IsAdminFilter(BoundFilter):
     async def check(self, message: types.Message):
         return message.from_user.id in ADMIN_IDS
 
-# Регистрация фильтра
+# --- НОВЫЙ КЛАСС ФИЛЬТРА: Только для разрешенных чатов ---
+class IsAllowedChatFilter(BoundFilter):
+    key = 'is_allowed_chat'
+
+    def __init__(self, is_allowed_chat):
+        self.is_allowed_chat = is_allowed_chat
+
+    async def check(self, message: types.Message):
+        if not self.is_allowed_chat:
+            return False
+        # Проверяем, является ли чат разрешенным для обычных пользователей
+        return message.chat.id in ALLOWED_CHAT_IDS
+
+# Регистрация фильтров
 dp.filters_factory.bind(IsAdminFilter)
+dp.filters_factory.bind(IsAllowedChatFilter)
+
 
 # --- ФУНКЦИИ БАЗЫ ДАННЫХ ---
 def init_db():
@@ -78,9 +101,8 @@ def insert_scooter_record(scooter_number, service, user_id, username, fullname):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
-    # НОВОЕ: Получаем текущее время в указанном часовом поясе
     now_localized = datetime.datetime.now(TIMEZONE)
-    timestamp_str = now_localized.strftime("%Y-%m-%d %H:%M:%S") # Формат для SQLite
+    timestamp_str = now_localized.strftime("%Y-%m-%d %H:%M:%S")
 
     cursor.execute('''
         INSERT INTO accepted_scooters (scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp)
@@ -93,8 +115,6 @@ def get_scooter_records(date_filter=None):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     if date_filter == 'today':
-        # При фильтрации по "сегодня" нужно учитывать часовой пояс
-        # Получаем текущую дату в локальном часовом поясе и используем ее для сравнения
         today_localized = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
         cursor.execute("SELECT * FROM accepted_scooters WHERE DATE(timestamp) = ?", (today_localized,))
     else:
@@ -104,11 +124,21 @@ def get_scooter_records(date_filter=None):
     return records
 
 # --- ОБРАБОТЧИКИ СООБЩЕНИЙ ---
+
+# Команда /start. Для удобства, может работать везде.
 @dp.message_handler(commands=['start'])
 async def command_start_handler(message: types.Message) -> None:
-    await message.answer(f"Привет, {message.from_user.full_name}! Я готов принимать самокаты.", parse_mode=types.ParseMode.HTML)
+    response = (f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
+                f"Я принимаю номера самокатов в группах с ID: {', '.join(map(str, ALLOWED_CHAT_IDS))}\n\n"
+                f"Просто отправь номер самоката или фото с номером в подписи. "
+                f"Для пакетной сдачи используй /batch_accept <сервис> <количество>.\n\n"
+                f"Твой ID чата: `{message.chat.id}`" # ВРЕМЕННО: Чтобы узнать ID группы
+               )
+    await message.answer(response, parse_mode=types.ParseMode.MARKDOWN)
 
-@dp.message_handler(commands=['batch_accept'])
+# Команда /batch_accept теперь будет работать только в разрешенных чатах
+# и может использоваться всеми (поскольку это сдача номера)
+@dp.message_handler(commands=['batch_accept'], is_allowed_chat=True)
 async def batch_accept_handler(message: types.Message) -> None:
     args = message.get_args().split()
     if len(args) != 2:
@@ -143,8 +173,6 @@ async def batch_accept_handler(message: types.Message) -> None:
     fullname = message.from_user.full_name
 
     accepted_count = 0
-    # НОВОЕ: Используем локализованное время для placeholder_number, если нужно,
-    # но для записи в DB используем now_localized.strftime("%Y-%m-%d %H:%M:%S")
     timestamp_now_for_placeholder = datetime.datetime.now(TIMEZONE).strftime("%Y%m%d%H%M%S") 
 
     for i in range(quantity):
@@ -163,6 +191,7 @@ async def batch_accept_handler(message: types.Message) -> None:
         parse_mode=types.ParseMode.HTML
     )
 
+# Админские команды (только для админов, могут быть в любом чате)
 @dp.message_handler(commands=['today_stats'], is_admin=True)
 async def admin_today_stats_handler(message: types.Message) -> None:
     records = get_scooter_records(date_filter='today')
@@ -253,27 +282,19 @@ def create_excel_report(records, sheet_name):
         cell.font = header_font
         cell.alignment = Alignment(horizontal='center', vertical='center')
 
-    # НОВОЕ: Форматирование времени при добавлении в Excel
     for row_data in records:
-        # Предполагаем, что колонка времени - последняя (индекс 6)
-        timestamp_utc_str = row_data[6] 
+        timestamp_str = row_data[6] 
         try:
-            # Парсим UTC время из строки
-            dt_utc = datetime.datetime.strptime(timestamp_utc_str, "%Y-%m-%d %H:%M:%S")
-            # Делаем его aware (осведомленным) о UTC
-            dt_utc = pytz.utc.localize(dt_utc)
-            # Конвертируем в локальный часовой пояс
-            dt_localized = dt_utc.astimezone(TIMEZONE)
-            # Форматируем для Excel
-            row_data_list = list(row_data) # Конвертируем в список для изменения
-            row_data_list[6] = dt_localized.strftime("%Y-%m-%d %H:%M:%S")
+            dt_stored = datetime.datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+            dt_aware = TIMEZONE.localize(dt_stored)
+            row_data_list = list(row_data) 
+            row_data_list[6] = dt_aware.strftime("%Y-%m-%d %H:%M:%S %Z%z")
             ws.append(row_data_list)
         except ValueError:
-            # Если формат времени не соответствует или есть другие ошибки, добавляем как есть
             ws.append(row_data)
         except Exception as e:
             print(f"Ошибка при обработке времени для Excel: {e} - Данные: {row_data}")
-            ws.append(row_data) # Добавить исходные данные, если произошла ошибка
+            ws.append(row_data)
 
     for col in ws.columns:
         max_length = 0
@@ -292,8 +313,10 @@ def create_excel_report(records, sheet_name):
     buffer.seek(0)
     return buffer
 
-@dp.message_handler(content_types=[types.ContentType.TEXT, types.ContentType.PHOTO, types.ContentType.DOCUMENT, types.ContentType.VIDEO, types.ContentType.ANIMATION])
-async def handle_all_messages(message: types.Message) -> None:
+# Обработчик всех текстовых сообщений и сообщений с медиа и подписями
+# НОВОЕ: Добавлен фильтр is_allowed_chat=True.
+@dp.message_handler(content_types=[types.ContentType.TEXT, types.ContentType.PHOTO, types.ContentType.DOCUMENT, types.ContentType.VIDEO, types.ContentType.ANIMATION], is_allowed_chat=True)
+async def handle_allowed_chat_messages(message: types.Message) -> None:
     text_to_check = message.text if message.text else message.caption
 
     if not text_to_check or not text_to_check.strip(): 
@@ -331,8 +354,6 @@ async def handle_all_messages(message: types.Message) -> None:
         total_accepted_from_user += 1
 
     batch_text_matches = BATCH_TEXT_PATTERN.findall(text_to_check)
-    
-    # НОВОЕ: Используем локализованное время для генерации placeholder_number
     timestamp_now_for_placeholder = datetime.datetime.now(TIMEZONE).strftime("%Y%m%d%H%M%S")
 
     for match in batch_text_matches:
@@ -370,6 +391,29 @@ async def handle_all_messages(message: types.Message) -> None:
         
         final_response = "\n".join(response_parts)
         await message.reply(final_response, parse_mode=types.ParseMode.HTML)
+
+# НОВЫЙ ОБРАБОТЧИК: Ловит все сообщения, которые не были обработаны ранее.
+# Этот обработчик будет срабатывать для сообщений из неразрешенных чатов (групп)
+# или для любых сообщений в личке от не-админов, которые не являются командами.
+@dp.message_handler(content_types=types.ContentType.ANY)
+async def handle_unallowed_messages(message: types.Message) -> None:
+    # Если это приватный чат и не админ
+    if message.chat.type == types.ChatType.PRIVATE and message.from_user.id not in ADMIN_IDS:
+        await message.answer("Извините, я принимаю номера самокатов только в разрешенных группах. Администраторы могут использовать меня в личке.")
+    # Если это групповой чат, но его ID нет в списке ALLOWED_CHAT_IDS
+    elif message.chat.type in [types.ChatType.GROUP, types.ChatType.SUPERGROUP] and message.chat.id not in ALLOWED_CHAT_IDS:
+        # Можно здесь ничего не отвечать, чтобы не спамить в "чужой" группе,
+        # или дать краткое объяснение, но это может быть нежелательно.
+        # Например:
+        # await message.answer("Этот бот не предназначен для работы в этой группе.")
+        pass # Лучше игнорировать, чтобы не показывать активность в нежелательных группах.
+    # Если это админ, и его сообщение не было обработано (например, неверная команда)
+    elif message.from_user.id in ADMIN_IDS:
+        # Можно здесь добавить логику для админов, если они отправили что-то не то
+        pass
+    else:
+        # Все остальные случаи, например, неадмин в приватном чате, но не текст
+        pass
 
 async def main() -> None:
     init_db()
