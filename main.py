@@ -5,9 +5,9 @@ import sqlite3
 import datetime
 from io import BytesIO
 
-# Изменения для aiogram 2.x
+# Импорты для aiogram 2.x
 from aiogram import Bot, Dispatcher, types
-from aiogram.dispatcher.filters import Command
+from aiogram.dispatcher.filters import Command # Для обработки команд
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -37,7 +37,7 @@ BATCH_TEXT_PATTERN = re.compile(r'(yandex|whoosh|jet)\s+(\d+)', re.IGNORECASE)
 
 # --- ИНИЦИАЛИЗАЦИЯ ---
 bot = Bot(token=BOT_TOKEN)
-# Изменение: storage убран, так как MemoryStorage больше не импортируется
+# Диспетчер для aiogram 2.x. parse_mode указывается при отправке сообщений.
 dp = Dispatcher(bot) 
 
 # --- ФУНКЦИИ БАЗЫ ДАННЫХ ---
@@ -84,12 +84,19 @@ def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
 # --- ОБРАБОТЧИКИ СООБЩЕНИЙ ---
+# Изменение: @dp.message_handler(commands=['start']) для aiogram 2.x
 @dp.message_handler(commands=['start'])
 async def command_start_handler(message: types.Message) -> None:
+    # Явно указываем parse_mode для aiogram 2.x
     await message.answer(f"Привет, {message.from_user.full_name}! Я готов принимать самокаты.", parse_mode=types.ParseMode.HTML)
 
+# Изменение: @dp.message_handler(commands=['batch_accept']) для aiogram 2.x
 @dp.message_handler(commands=['batch_accept'])
 async def batch_accept_handler(message: types.Message) -> None:
+    """
+    Принимает пакетную сдачу самокатов: /batch_accept <сервис> <количество>
+    """
+    # message.get_args() для получения аргументов команды в aiogram 2.x
     args = message.get_args().split()
     if len(args) != 2:
         await message.reply("Используйте команду в формате: /batch_accept <сервис> <количество>\nНапример: /batch_accept Yandex 20", parse_mode=types.ParseMode.HTML)
@@ -141,6 +148,7 @@ async def batch_accept_handler(message: types.Message) -> None:
         parse_mode=types.ParseMode.HTML
     )
 
+# Изменение: @dp.message_handler с func=lambda для фильтрации админов
 @dp.message_handler(commands=['today_stats'], func=lambda message: is_admin(message.from_user.id))
 async def admin_today_stats_handler(message: types.Message) -> None:
     records = get_scooter_records(date_filter='today')
@@ -190,7 +198,7 @@ async def admin_today_stats_handler(message: types.Message) -> None:
     
     await message.answer(final_response, parse_mode=types.ParseMode.HTML)
 
-
+# Изменение: @dp.message_handler с func=lambda для фильтрации админов
 @dp.message_handler(commands=['export_today_excel'], func=lambda message: is_admin(message.from_user.id))
 async def admin_export_today_excel_handler(message: types.Message) -> None:
     await message.answer("Формирую отчет за сегодня, пожалуйста, подождите...", parse_mode=types.ParseMode.HTML)
@@ -201,9 +209,11 @@ async def admin_export_today_excel_handler(message: types.Message) -> None:
 
     excel_file = create_excel_report(records, "Отчет за сегодня")
     filename = f"report_today_{datetime.date.today().isoformat()}.xlsx"
+    # Изменение: bot.send_document вместо message.answer_document для aiogram 2.x
     await bot.send_document(chat_id=message.chat.id, document=types.InputFile(excel_file, filename=filename))
     await message.answer("Отчет за сегодня готов.", parse_mode=types.ParseMode.HTML)
 
+# Изменение: @dp.message_handler с func=lambda для фильтрации админов
 @dp.message_handler(commands=['export_all_excel'], func=lambda message: is_admin(message.from_user.id))
 async def admin_export_all_excel_handler(message: types.Message) -> None:
     await message.answer("Формирую полный отчет, пожалуйста, подождите...", parse_mode=types.ParseMode.HTML)
@@ -214,6 +224,7 @@ async def admin_export_all_excel_handler(message: types.Message) -> None:
 
     excel_file = create_excel_report(records, "Полный отчет")
     filename = f"full_report_{datetime.date.today().isoformat()}.xlsx"
+    # Изменение: bot.send_document вместо message.answer_document для aiogram 2.x
     await bot.send_document(chat_id=message.chat.id, document=types.InputFile(excel_file, filename=filename))
     await message.answer("Полный отчет готов.", parse_mode=types.ParseMode.HTML)
 
@@ -251,6 +262,7 @@ def create_excel_report(records, sheet_name):
     buffer.seek(0)
     return buffer
 
+# Изменение: @dp.message_handler(content_types=types.ContentType.TEXT) для aiogram 2.x
 @dp.message_handler(content_types=types.ContentType.TEXT)
 async def handle_all_messages(message: types.Message) -> None:
     text_to_check = message.text
@@ -332,7 +344,7 @@ async def handle_all_messages(message: types.Message) -> None:
 async def main() -> None:
     init_db()
     print("Бот запускается...")
-    # Изменение: dp.start_polling для aiogram 2.x
+    # dp.start_polling() для aiogram 2.x
     await dp.start_polling()
     print("Бот остановлен.")
 
