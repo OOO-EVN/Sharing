@@ -4,10 +4,11 @@ import os
 import sqlite3
 import datetime
 from io import BytesIO
+import pytz # НОВОЕ: Импорт для работы с часовыми поясами
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher.filters import Command
-from aiogram.dispatcher.filters import BoundFilter # Импорт для создания кастомного фильтра
+from aiogram.dispatcher.filters import BoundFilter
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -25,6 +26,10 @@ if not ADMIN_IDS:
     print("Внимание: ADMIN_IDS не заданы в .env файле. Пожалуйста, добавьте ID администраторов.")
 
 DB_NAME = 'scooters.db'
+
+# Часовой пояс для Алматы (Казахстан). UTC+5
+# Убедитесь, что 'Asia/Almaty' является правильным идентификатором для pytz
+TIMEZONE = pytz.timezone('Asia/Almaty') 
 
 # Регулярные выражения для определения сервиса:
 YANDEX_SCOOTER_PATTERN = re.compile(r'\b\d{8}\b')
@@ -46,7 +51,6 @@ class IsAdminFilter(BoundFilter):
         self.is_admin = is_admin
 
     async def check(self, message: types.Message):
-        # Этот фильтр работает для любого типа сообщения, где нужно проверить ID пользователя
         return message.from_user.id in ADMIN_IDS
 
 # Регистрация фильтра
@@ -73,10 +77,15 @@ def init_db():
 def insert_scooter_record(scooter_number, service, user_id, username, fullname):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
+    
+    # НОВОЕ: Получаем текущее время в указанном часовом поясе
+    now_localized = datetime.datetime.now(TIMEZONE)
+    timestamp_str = now_localized.strftime("%Y-%m-%d %H:%M:%S") # Формат для SQLite
+
     cursor.execute('''
-        INSERT INTO accepted_scooters (scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (scooter_number, service, user_id, username, fullname))
+        INSERT INTO accepted_scooters (scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (scooter_number, service, user_id, username, fullname, timestamp_str))
     conn.commit()
     conn.close()
 
@@ -84,7 +93,10 @@ def get_scooter_records(date_filter=None):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     if date_filter == 'today':
-        cursor.execute("SELECT * FROM accepted_scooters WHERE DATE(timestamp, 'localtime') = DATE('now', 'localtime')")
+        # При фильтрации по "сегодня" нужно учитывать часовой пояс
+        # Получаем текущую дату в локальном часовом поясе и используем ее для сравнения
+        today_localized = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
+        cursor.execute("SELECT * FROM accepted_scooters WHERE DATE(timestamp) = ?", (today_localized,))
     else:
         cursor.execute("SELECT * FROM accepted_scooters")
     records = cursor.fetchall()
@@ -131,10 +143,12 @@ async def batch_accept_handler(message: types.Message) -> None:
     fullname = message.from_user.full_name
 
     accepted_count = 0
-    timestamp_now = datetime.datetime.now().strftime("%Y%m%d%H%M%S") 
+    # НОВОЕ: Используем локализованное время для placeholder_number, если нужно,
+    # но для записи в DB используем now_localized.strftime("%Y-%m-%d %H:%M:%S")
+    timestamp_now_for_placeholder = datetime.datetime.now(TIMEZONE).strftime("%Y%m%d%H%M%S") 
 
     for i in range(quantity):
-        placeholder_number = f"{service.upper()}_BATCH_{timestamp_now}_{i+1}"
+        placeholder_number = f"{service.upper()}_BATCH_{timestamp_now_for_placeholder}_{i+1}"
         insert_scooter_record(placeholder_number, service, user_id, username, fullname)
         accepted_count += 1
 
@@ -239,9 +253,28 @@ def create_excel_report(records, sheet_name):
         cell.font = header_font
         cell.alignment = Alignment(horizontal='center', vertical='center')
 
+    # НОВОЕ: Форматирование времени при добавлении в Excel
     for row_data in records:
-        ws.append(row_data)
-    
+        # Предполагаем, что колонка времени - последняя (индекс 6)
+        timestamp_utc_str = row_data[6] 
+        try:
+            # Парсим UTC время из строки
+            dt_utc = datetime.datetime.strptime(timestamp_utc_str, "%Y-%m-%d %H:%M:%S")
+            # Делаем его aware (осведомленным) о UTC
+            dt_utc = pytz.utc.localize(dt_utc)
+            # Конвертируем в локальный часовой пояс
+            dt_localized = dt_utc.astimezone(TIMEZONE)
+            # Форматируем для Excel
+            row_data_list = list(row_data) # Конвертируем в список для изменения
+            row_data_list[6] = dt_localized.strftime("%Y-%m-%d %H:%M:%S")
+            ws.append(row_data_list)
+        except ValueError:
+            # Если формат времени не соответствует или есть другие ошибки, добавляем как есть
+            ws.append(row_data)
+        except Exception as e:
+            print(f"Ошибка при обработке времени для Excel: {e} - Данные: {row_data}")
+            ws.append(row_data) # Добавить исходные данные, если произошла ошибка
+
     for col in ws.columns:
         max_length = 0
         column = col[0].column_letter
@@ -259,10 +292,8 @@ def create_excel_report(records, sheet_name):
     buffer.seek(0)
     return buffer
 
-# Изменение: Добавление content_types для обработки подписей к медиафайлам
 @dp.message_handler(content_types=[types.ContentType.TEXT, types.ContentType.PHOTO, types.ContentType.DOCUMENT, types.ContentType.VIDEO, types.ContentType.ANIMATION])
 async def handle_all_messages(message: types.Message) -> None:
-    # Проверяем message.text для обычных сообщений и message.caption для подписей
     text_to_check = message.text if message.text else message.caption
 
     if not text_to_check or not text_to_check.strip(): 
@@ -300,7 +331,9 @@ async def handle_all_messages(message: types.Message) -> None:
         total_accepted_from_user += 1
 
     batch_text_matches = BATCH_TEXT_PATTERN.findall(text_to_check)
-    timestamp_now = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    
+    # НОВОЕ: Используем локализованное время для генерации placeholder_number
+    timestamp_now_for_placeholder = datetime.datetime.now(TIMEZONE).strftime("%Y%m%d%H%M%S")
 
     for match in batch_text_matches:
         service_raw = match[0].lower()
@@ -312,7 +345,7 @@ async def handle_all_messages(message: types.Message) -> None:
             quantity = int(quantity_str)
             if quantity > 0:
                 for i in range(quantity):
-                    placeholder_number = f"{service.upper()}_BATCH_{timestamp_now}_{i+1}"
+                    placeholder_number = f"{service.upper()}_BATCH_{timestamp_now_for_placeholder}_{i+1}"
                     insert_scooter_record(placeholder_number, service, user_id, username, fullname)
                     accepted_by_service[service] += 1
                     total_accepted_from_user += 1
@@ -345,4 +378,4 @@ async def main() -> None:
     print("Бот остановлен.")
 
 if __name__ == "__main__":
-    asyncio.run(main()
+    asyncio.run(main())
