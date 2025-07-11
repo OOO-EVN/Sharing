@@ -33,7 +33,7 @@ JET_SCOOTER_PATTERN = re.compile(r'\b\d{6}\b')
 
 # --- ИНИЦИАЛИЗАЦИЯ ---
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(parse_mode=ParseMode.HTML) # Важно для упоминаний по ID
+dp = Dispatcher(parse_mode=ParseMode.HTML) # ParseMode.HTML остается, т.к. используется для упоминаний по ID
 
 # --- ФУНКЦИИ БАЗЫ ДАННЫХ ---
 def init_db():
@@ -88,23 +88,59 @@ async def command_start_handler(message: types.Message) -> None:
 
 @dp.message(lambda message: is_admin(message.from_user.id), Command("today_stats"))
 async def admin_today_stats_handler(message: types.Message) -> None:
+    """
+    Показывает администратору статистику по принятым самокатам за текущий день,
+    с группировкой по пользователям.
+    """
     records = get_scooter_records(date_filter='today')
     
     if not records:
         await message.answer("Сегодня пока ничего не принято.")
         return
 
-    stats = {}
+    users_stats = {}
     for record in records:
+        user_id = record[3]
+        username = record[4] if record[4] else record[5]
         service = record[2]
-        stats[service] = stats.get(service, 0) + 1
+
+        if user_id not in users_stats:
+            users_stats[user_id] = {
+                'display_name': f"@{username}" if record[4] else record[5],
+                'services': {}
+            }
+        
+        users_stats[user_id]['services'][service] = users_stats[user_id]['services'].get(service, 0) + 1
     
-    response = "Статистика за сегодня:\n"
-    for service, count in stats.items():
-        response += f"Принято {service}: {count}\n"
+    response_parts = []
+    total_all_users = 0
+
+    for user_id, user_data in users_stats.items():
+        display_name = user_data['display_name']
+        services_stats = user_data['services']
+        
+        # УДАЛЕНЫ ТЕГИ <b> </b>
+        response_parts.append(f"{display_name} Статистика за сегодня:")
+        
+        user_total = 0
+        for service, count in services_stats.items():
+            response_parts.append(f"Принято {service}: {count}")
+            user_total += count
+        
+        response_parts.append(f"Всего от {display_name}: {user_total} шт.")
+        response_parts.append("Деп\n")
+        total_all_users += user_total
+
+    if response_parts and response_parts[-1] == "Деп\n":
+        response_parts[-1] = "Деп"
+
+    final_response = "\n".join(response_parts)
     
-    response += f"\nВсего сегодня принято: {len(records)}"
-    await message.answer(response)
+    # УДАЛЕНЫ ТЕГИ <b> </b>
+    final_response += f"\n---\nОбщий итог за сегодня: {total_all_users} шт."
+    
+    await message.answer(final_response)
+
 
 @dp.message(lambda message: is_admin(message.from_user.id), Command("export_today_excel"))
 async def admin_export_today_excel_handler(message: types.Message) -> None:
@@ -183,7 +219,7 @@ async def handle_all_messages(message: types.Message) -> None:
         username = message.from_user.username
         fullname = message.from_user.full_name
 
-        total_accepted_from_user = 0 # Новый счетчик для общего количества от этого пользователя
+        total_accepted_from_user = 0
 
         yandex_numbers = YANDEX_SCOOTER_PATTERN.findall(text_to_check)
         yandex_count = len(yandex_numbers)
@@ -210,21 +246,19 @@ async def handle_all_messages(message: types.Message) -> None:
                 insert_scooter_record(num, "Jet", user_id, username, fullname)
 
         if response_parts:
-            # Получаем информацию об отправителе для "грубого" упоминания
             user_mention_text = message.from_user.full_name
             if message.from_user.username:
                 user_mention = f"@{message.from_user.username}"
             else:
                 user_mention = f"<a href='tg://user?id={message.from_user.id}'>{user_mention_text}</a>"
 
-            # Формируем "грубый" ответ
+            # Теги <b> здесь остались, так как они относятся к ответу пользователя,
+            # а не к админской статистике. Если вы хотите убрать их и здесь, скажите.
             if total_accepted_from_user > 0:
-                # Используем bold для выделения
                 main_message = f"<b>{user_mention}, принято от тебя {total_accepted_from_user} шт.:</b>"
-            else: # На случай, если каким-то образом response_parts не пуст, но счетчик 0
+            else:
                 main_message = f"<b>{user_mention}, принято от тебя:</b>"
             
-            # Объединяем основное сообщение с деталями по сервисам
             final_response = main_message + "\n" + "\n".join(response_parts)
             
             await message.reply(final_response)
@@ -237,4 +271,4 @@ async def main() -> None:
     print("Бот остановлен.")
 
 if __name__ == "__main__":
-    asyncio.run(main()
+    asyncio.run(main())
