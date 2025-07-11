@@ -1,10 +1,10 @@
 import asyncio
 import re
-import os # Импортируем модуль os для работы с переменными окружения
+import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiogram.enums import ParseMode
-from dotenv import load_dotenv # Импортируем функцию для загрузки .env
+from dotenv import load_dotenv
 
 # Загружаем переменные окружения из .env файла
 load_dotenv()
@@ -31,8 +31,11 @@ WOOSH_SCOOTER_PATTERN = re.compile(r'\b[A-Z]{2}\d{4}\b')
 JET_SCOOTER_PATTERN = re.compile(r'\b\d{3}-\d{3}\b')
 
 # --- ИНИЦИАЛИЗАЦИЯ ---
-bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
-dp = Dispatcher()
+# ИЗМЕНЕНО: parse_mode больше не указываем при создании Bot
+bot = Bot(token=BOT_TOKEN) 
+
+# ИЗМЕНЕНО: parse_mode теперь указывается при создании Dispatcher
+dp = Dispatcher(parse_mode=ParseMode.HTML) 
 
 # --- ОБРАБОТЧИКИ СООБЩЕНИЙ ---
 
@@ -104,10 +107,12 @@ async def handle_all_messages(message: types.Message) -> None:
         if response_parts:
             # Получаем информацию об отправителе
             user_mention = message.from_user.full_name
+            # Если у пользователя есть username, используем его для упоминания
             if message.from_user.username:
                 user_mention = f"@{message.from_user.username}"
+            # Если нет username, но есть id, можно сделать упоминание по id (только для личных чатов или определенных групп)
+            # В группах для упоминания чаще всего нужен username или отвечать reply-ем
             else:
-                # Если нет username, используем ссылку на профиль по ID
                 user_mention = f"<a href='tg://user?id={message.from_user.id}'>{message.from_user.full_name}</a>"
 
 
@@ -125,4 +130,4 @@ async def main() -> None:
     print("Бот остановлен.")
 
 if __name__ == "__main__":
-    asyncio.run(main()
+    asyncio.run(main())
