@@ -7,6 +7,7 @@ from io import BytesIO
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher.filters import Command
+from aiogram.dispatcher.filters import BoundFilter # НОВОЕ: Импорт для создания кастомного фильтра
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -14,6 +15,7 @@ from openpyxl.styles import Font, Alignment
 
 load_dotenv()
 
+# --- КОНСТАНТЫ ---
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден в .env файле. Пожалуйста, добавьте его.")
@@ -24,15 +26,32 @@ if not ADMIN_IDS:
 
 DB_NAME = 'scooters.db'
 
+# Регулярные выражения для определения сервиса:
 YANDEX_SCOOTER_PATTERN = re.compile(r'\b\d{8}\b')
 WOOSH_SCOOTER_PATTERN = re.compile(r'\b[A-Z]{2}\d{4}\b', re.IGNORECASE)
 JET_SCOOTER_PATTERN = re.compile(r'\b\d{6}\b')
 
+# Регулярное выражение для распознавания пакетных записей в свободном тексте
 BATCH_TEXT_PATTERN = re.compile(r'(yandex|whoosh|jet)\s+(\d+)', re.IGNORECASE)
 
+# --- ИНИЦИАЛИЗАЦИЯ ---
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot) 
 
+# --- КЛАСС ФИЛЬТРА ДЛЯ АДМИНОВ (НОВОЕ) ---
+class IsAdminFilter(BoundFilter):
+    key = 'is_admin'
+
+    def __init__(self, is_admin):
+        self.is_admin = is_admin
+
+    async def check(self, message: types.Message):
+        return message.from_user.id in ADMIN_IDS
+
+# Регистрация фильтра
+dp.filters_factory.bind(IsAdminFilter)
+
+# --- ФУНКЦИИ БАЗЫ ДАННЫХ ---
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -71,9 +90,7 @@ def get_scooter_records(date_filter=None):
     conn.close()
     return records
 
-def is_admin(user_id: int) -> bool:
-    return user_id in ADMIN_IDS
-
+# --- ОБРАБОТЧИКИ СООБЩЕНИЙ ---
 @dp.message_handler(commands=['start'])
 async def command_start_handler(message: types.Message) -> None:
     await message.answer(f"Привет, {message.from_user.full_name}! Я готов принимать самокаты.", parse_mode=types.ParseMode.HTML)
@@ -131,7 +148,8 @@ async def batch_accept_handler(message: types.Message) -> None:
         parse_mode=types.ParseMode.HTML
     )
 
-@dp.message_handler(commands=['today_stats'], func=lambda message: is_admin(message.from_user.id))
+# Изменение: Использование кастомного фильтра is_admin=True
+@dp.message_handler(commands=['today_stats'], is_admin=True)
 async def admin_today_stats_handler(message: types.Message) -> None:
     records = get_scooter_records(date_filter='today')
     
@@ -180,8 +198,8 @@ async def admin_today_stats_handler(message: types.Message) -> None:
     
     await message.answer(final_response, parse_mode=types.ParseMode.HTML)
 
-
-@dp.message_handler(commands=['export_today_excel'], func=lambda message: is_admin(message.from_user.id))
+# Изменение: Использование кастомного фильтра is_admin=True
+@dp.message_handler(commands=['export_today_excel'], is_admin=True)
 async def admin_export_today_excel_handler(message: types.Message) -> None:
     await message.answer("Формирую отчет за сегодня, пожалуйста, подождите...", parse_mode=types.ParseMode.HTML)
     records = get_scooter_records(date_filter='today')
@@ -194,7 +212,8 @@ async def admin_export_today_excel_handler(message: types.Message) -> None:
     await bot.send_document(chat_id=message.chat.id, document=types.InputFile(excel_file, filename=filename))
     await message.answer("Отчет за сегодня готов.", parse_mode=types.ParseMode.HTML)
 
-@dp.message_handler(commands=['export_all_excel'], func=lambda message: is_admin(message.from_user.id))
+# Изменение: Использование кастомного фильтра is_admin=True
+@dp.message_handler(commands=['export_all_excel'], is_admin=True)
 async def admin_export_all_excel_handler(message: types.Message) -> None:
     await message.answer("Формирую полный отчет, пожалуйста, подождите...", parse_mode=types.ParseMode.HTML)
     records = get_scooter_records(date_filter='all')
@@ -206,7 +225,6 @@ async def admin_export_all_excel_handler(message: types.Message) -> None:
     filename = f"full_report_{datetime.date.today().isoformat()}.xlsx"
     await bot.send_document(chat_id=message.chat.id, document=types.InputFile(excel_file, filename=filename))
     await message.answer("Полный отчет готов.", parse_mode=types.ParseMode.HTML)
-
 
 def create_excel_report(records, sheet_name):
     wb = Workbook()
