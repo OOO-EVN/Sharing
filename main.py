@@ -4,16 +4,18 @@ import os
 import sqlite3
 import datetime
 from io import BytesIO
-import pytz
+import pytz # Импорт для работы с часовыми поясами
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher.filters import Command
 from aiogram.dispatcher.filters import BoundFilter
+from aiogram.utils import executor # Для запуска бота
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 
+# Загружаем переменные окружения из файла .env
 load_dotenv()
 
 # --- КОНСТАНТЫ ---
@@ -21,37 +23,36 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден в .env файле. Пожалуйста, добавьте его.")
 
+# Парсим ID администраторов из переменной окружения
 ADMIN_IDS = [int(admin_id) for admin_id in os.getenv('ADMIN_IDS', '').split(',') if admin_id.strip()]
 if not ADMIN_IDS:
     print("Внимание: ADMIN_IDS не заданы в .env файле. Пожалуйста, добавьте ID администраторов.")
 
-# НОВОЕ: Разрешенные ID чатов/групп. Можно указать несколько, разделенных запятыми.
-# Например: ALLOWED_CHAT_IDS=-1001234567890,-1009876543210
-# Чтобы узнать ID группы, временно добавьте бота в группу, и отправьте /start,
-# в ответе бота на команду /start будет message.chat.id
+# Парсим ID разрешенных чатов/групп из переменной окружения
 ALLOWED_CHAT_IDS = [int(chat_id) for chat_id in os.getenv('ALLOWED_CHAT_IDS', '').split(',') if chat_id.strip()]
 if not ALLOWED_CHAT_IDS:
-    print("Внимание: ALLOWED_CHAT_IDS не заданы в .env файле. Бот будет работать только в личке с админами.")
+    print("Внимание: ALLOWED_CHAT_IDS не заданы в .env файле. Бот будет принимать номера только в личке с админами.")
 
-
-DB_NAME = 'scooters.db'
+DB_NAME = 'scooters.db' # Имя файла базы данных SQLite
 
 # Часовой пояс для Алматы (Казахстан). UTC+5
 TIMEZONE = pytz.timezone('Asia/Almaty') 
 
-# Регулярные выражения для определения сервиса:
-YANDEX_SCOOTER_PATTERN = re.compile(r'\b\d{8}\b')
-WOOSH_SCOOTER_PATTERN = re.compile(r'\b[A-Z]{2}\d{4}\b', re.IGNORECASE)
-JET_SCOOTER_PATTERN = re.compile(r'\b\d{6}\b')
+# Регулярные выражения для определения сервиса самоката:
+YANDEX_SCOOTER_PATTERN = re.compile(r'\b\d{8}\b') # 8 цифр
+WOOSH_SCOOTER_PATTERN = re.compile(r'\b[A-Z]{2}\d{4}\b', re.IGNORECASE) # 2 буквы + 4 цифры
+JET_SCOOTER_PATTERN = re.compile(r'\b\d{6}\b') # 6 цифр
 
 # Регулярное выражение для распознавания пакетных записей в свободном тексте
 BATCH_TEXT_PATTERN = re.compile(r'(yandex|whoosh|jet)\s+(\d+)', re.IGNORECASE)
 
-# --- ИНИЦИАЛИЗАЦИЯ ---
+# --- ИНИЦИАЛИЗАЦИЯ БОТА И ДИСПЕТЧЕРА ---
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot) 
 
-# --- КЛАСС ФИЛЬТРА ДЛЯ АДМИНОВ ---
+# --- КЛАССЫ ФИЛЬТРОВ ---
+
+# Фильтр для проверки, является ли пользователь администратором
 class IsAdminFilter(BoundFilter):
     key = 'is_admin'
 
@@ -61,7 +62,7 @@ class IsAdminFilter(BoundFilter):
     async def check(self, message: types.Message):
         return message.from_user.id in ADMIN_IDS
 
-# --- НОВЫЙ КЛАСС ФИЛЬТРА: Только для разрешенных чатов ---
+# Фильтр для проверки, находится ли сообщение в разрешенном чате (группе)
 class IsAllowedChatFilter(BoundFilter):
     key = 'is_allowed_chat'
 
@@ -71,15 +72,17 @@ class IsAllowedChatFilter(BoundFilter):
     async def check(self, message: types.Message):
         if not self.is_allowed_chat:
             return False
-        # Проверяем, является ли чат разрешенным для обычных пользователей
+        # Проверяем, является ли чат разрешенным для приема номеров
         return message.chat.id in ALLOWED_CHAT_IDS
 
-# Регистрация фильтров
+# Регистрация созданных фильтров в диспетчере
 dp.filters_factory.bind(IsAdminFilter)
 dp.filters_factory.bind(IsAllowedChatFilter)
 
 
-# --- ФУНКЦИИ БАЗЫ ДАННЫХ ---
+# --- ФУНКЦИИ ВЗАИМОДЕЙСТВИЯ С БАЗОЙ ДАННЫХ ---
+
+# Инициализация базы данных: создание таблицы, если она не существует
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -97,12 +100,14 @@ def init_db():
     conn.commit()
     conn.close()
 
+# Вставка записи о самокате в базу данных
 def insert_scooter_record(scooter_number, service, user_id, username, fullname):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
+    # Получаем текущее время в указанном часовом поясе (UTC+5)
     now_localized = datetime.datetime.now(TIMEZONE)
-    timestamp_str = now_localized.strftime("%Y-%m-%d %H:%M:%S")
+    timestamp_str = now_localized.strftime("%Y-%m-%d %H:%M:%S") # Формат для SQLite
 
     cursor.execute('''
         INSERT INTO accepted_scooters (scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp)
@@ -111,10 +116,12 @@ def insert_scooter_record(scooter_number, service, user_id, username, fullname):
     conn.commit()
     conn.close()
 
+# Получение записей о самокатах из базы данных (с фильтром по дате или все)
 def get_scooter_records(date_filter=None):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     if date_filter == 'today':
+        # При фильтрации по "сегодня" используем локализованную дату
         today_localized = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
         cursor.execute("SELECT * FROM accepted_scooters WHERE DATE(timestamp) = ?", (today_localized,))
     else:
@@ -125,24 +132,30 @@ def get_scooter_records(date_filter=None):
 
 # --- ОБРАБОТЧИКИ СООБЩЕНИЙ ---
 
-# Команда /start. Для удобства, может работать везде.
+# Обработчик команды /start
 @dp.message_handler(commands=['start'])
 async def command_start_handler(message: types.Message) -> None:
+    # Собираем список разрешенных чатов для отображения пользователю
+    allowed_chats_info = ', '.join(map(str, ALLOWED_CHAT_IDS)) if ALLOWED_CHAT_IDS else "не указаны (бот принимает номера только от админов)"
+    
     response = (f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
-                f"Я принимаю номера самокатов в группах с ID: {', '.join(map(str, ALLOWED_CHAT_IDS))}\n\n"
+                f"Я принимаю номера самокатов в группах с ID: `{allowed_chats_info}`.\n"
+                f"Если ты админ, можешь сдавать самокаты и получать отчёты в любом чате.\n\n"
                 f"Просто отправь номер самоката или фото с номером в подписи. "
-                f"Для пакетной сдачи используй /batch_accept <сервис> <количество>.\n\n"
-                f"Твой ID чата: `{message.chat.id}`" # ВРЕМЕННО: Чтобы узнать ID группы
+                f"Для пакетной сдачи используй `/batch_accept <сервис> <количество>`.\n\n"
+                f"Твой ID чата: `{message.chat.id}`" # Полезно для получения ID группы при настройке
                )
     await message.answer(response, parse_mode=types.ParseMode.MARKDOWN)
 
-# Команда /batch_accept теперь будет работать только в разрешенных чатах
-# и может использоваться всеми (поскольку это сдача номера)
+# Обработчик команды /batch_accept
+# Этот обработчик срабатывает для всех, кто в разрешенном чате (включая админов)
+# и для админов в любом чате (благодаря order='HIGH')
 @dp.message_handler(commands=['batch_accept'], is_allowed_chat=True)
+@dp.message_handler(commands=['batch_accept'], is_admin=True, state=None, run_task=True) # Админы могут использовать везде
 async def batch_accept_handler(message: types.Message) -> None:
     args = message.get_args().split()
     if len(args) != 2:
-        await message.reply("Используйте команду в формате: /batch_accept <сервис> <количество>\nНапример: /batch_accept Yandex 20", parse_mode=types.ParseMode.HTML)
+        await message.reply("Используйте команду в формате: `/batch_accept <сервис> <количество>`\nНапример: `/batch_accept Yandex 20`", parse_mode=types.ParseMode.MARKDOWN)
         return
 
     service_raw = args[0].lower() 
@@ -157,7 +170,7 @@ async def batch_accept_handler(message: types.Message) -> None:
     service = service_map.get(service_raw)
 
     if not service:
-        await message.reply("Неизвестный сервис. Доступные сервисы: Yandex, Whoosh, Jet.", parse_mode=types.ParseMode.HTML)
+        await message.reply("Неизвестный сервис. Доступные сервисы: `Yandex`, `Whoosh`, `Jet`.", parse_mode=types.ParseMode.MARKDOWN)
         return
 
     try:
@@ -173,6 +186,7 @@ async def batch_accept_handler(message: types.Message) -> None:
     fullname = message.from_user.full_name
 
     accepted_count = 0
+    # Используем локализованное время для генерации placeholder_number
     timestamp_now_for_placeholder = datetime.datetime.now(TIMEZONE).strftime("%Y%m%d%H%M%S") 
 
     for i in range(quantity):
@@ -191,7 +205,7 @@ async def batch_accept_handler(message: types.Message) -> None:
         parse_mode=types.ParseMode.HTML
     )
 
-# Админские команды (только для админов, могут быть в любом чате)
+# Обработчик админской команды /today_stats
 @dp.message_handler(commands=['today_stats'], is_admin=True)
 async def admin_today_stats_handler(message: types.Message) -> None:
     records = get_scooter_records(date_filter='today')
@@ -229,9 +243,10 @@ async def admin_today_stats_handler(message: types.Message) -> None:
             user_total += count
         
         response_parts.append(f"Всего от {display_name}: {user_total} шт.")
-        response_parts.append("Деп\n")
+        response_parts.append("Деп\n") # Разделитель для читаемости между пользователями
         total_all_users += user_total
 
+    # Удаляем последний разделитель, если он лишний
     if response_parts and response_parts[-1] == "Деп\n":
         response_parts[-1] = "Деп"
 
@@ -241,7 +256,7 @@ async def admin_today_stats_handler(message: types.Message) -> None:
     
     await message.answer(final_response, parse_mode=types.ParseMode.HTML)
 
-
+# Обработчик админской команды /export_today_excel
 @dp.message_handler(commands=['export_today_excel'], is_admin=True)
 async def admin_export_today_excel_handler(message: types.Message) -> None:
     await message.answer("Формирую отчет за сегодня, пожалуйста, подождите...", parse_mode=types.ParseMode.HTML)
@@ -255,6 +270,7 @@ async def admin_export_today_excel_handler(message: types.Message) -> None:
     await bot.send_document(chat_id=message.chat.id, document=types.InputFile(excel_file, filename=filename))
     await message.answer("Отчет за сегодня готов.", parse_mode=types.ParseMode.HTML)
 
+# Обработчик админской команды /export_all_excel
 @dp.message_handler(commands=['export_all_excel'], is_admin=True)
 async def admin_export_all_excel_handler(message: types.Message) -> None:
     await message.answer("Формирую полный отчет, пожалуйста, подождите...", parse_mode=types.ParseMode.HTML)
@@ -268,7 +284,7 @@ async def admin_export_all_excel_handler(message: types.Message) -> None:
     await bot.send_document(chat_id=message.chat.id, document=types.InputFile(excel_file, filename=filename))
     await message.answer("Полный отчет готов.", parse_mode=types.ParseMode.HTML)
 
-
+# Функция для создания Excel-отчета
 def create_excel_report(records, sheet_name):
     wb = Workbook()
     ws = wb.active
@@ -283,29 +299,34 @@ def create_excel_report(records, sheet_name):
         cell.alignment = Alignment(horizontal='center', vertical='center')
 
     for row_data in records:
-        timestamp_str = row_data[6] 
+        timestamp_str = row_data[6] # Время находится в последней колонке
         try:
+            # Парсим время из строки (оно уже должно быть в TIMEZONE)
             dt_stored = datetime.datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+            # Делаем его aware (осведомленным) о TIMEZONE, чтобы форматировать с зоной
             dt_aware = TIMEZONE.localize(dt_stored)
-            row_data_list = list(row_data) 
-            row_data_list[6] = dt_aware.strftime("%Y-%m-%d %H:%M:%S %Z%z")
+            # Форматируем для Excel, добавляя информацию о часовом поясе
+            row_data_list = list(row_data) # Конвертируем в список для изменения
+            row_data_list[6] = dt_aware.strftime("%Y-%m-%d %H:%M:%S %Z%z") # Пример: "2025-07-12 01:00:00 ALMT+0500"
             ws.append(row_data_list)
         except ValueError:
+            # Если формат времени не соответствует или есть другие ошибки, добавляем как есть
             ws.append(row_data)
         except Exception as e:
             print(f"Ошибка при обработке времени для Excel: {e} - Данные: {row_data}")
-            ws.append(row_data)
+            ws.append(row_data) # Добавить исходные данные, если произошла ошибка
 
+    # Автоматическая настройка ширины столбцов
     for col in ws.columns:
         max_length = 0
-        column = col[0].column_letter
+        column = col[0].column_letter # Получаем букву столбца
         for cell in col:
             try:
                 if len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
             except:
                 pass
-        adjusted_width = (max_length + 2)
+        adjusted_width = (max_length + 2) # Добавляем небольшой запас
         ws.column_dimensions[column].width = adjusted_width
 
     buffer = BytesIO()
@@ -313,12 +334,13 @@ def create_excel_report(records, sheet_name):
     buffer.seek(0)
     return buffer
 
-# Обработчик всех текстовых сообщений и сообщений с медиа и подписями
-# НОВОЕ: Добавлен фильтр is_allowed_chat=True.
+# Обработчик для сообщений, содержащих номера самокатов (для обычных пользователей в разрешенных чатах)
+# Также срабатывает для админов, так как админы тоже могут кидать номера.
 @dp.message_handler(content_types=[types.ContentType.TEXT, types.ContentType.PHOTO, types.ContentType.DOCUMENT, types.ContentType.VIDEO, types.ContentType.ANIMATION], is_allowed_chat=True)
 async def handle_allowed_chat_messages(message: types.Message) -> None:
     text_to_check = message.text if message.text else message.caption
 
+    # Игнорируем пустые сообщения или медиа без подписи
     if not text_to_check or not text_to_check.strip(): 
         return 
 
@@ -335,24 +357,28 @@ async def handle_allowed_chat_messages(message: types.Message) -> None:
     total_accepted_from_user = 0
     accepted_by_service = {"Яндекс": 0, "Whoosh": 0, "Jet": 0}
 
+    # Поиск номеров Яндекс
     yandex_numbers = YANDEX_SCOOTER_PATTERN.findall(text_to_check)
     for num in yandex_numbers:
         insert_scooter_record(num, "Яндекс", user_id, username, fullname)
         accepted_by_service["Яндекс"] += 1
         total_accepted_from_user += 1
 
+    # Поиск номеров Whoosh
     woosh_numbers = WOOSH_SCOOTER_PATTERN.findall(text_to_check)
     for num in woosh_numbers:
         insert_scooter_record(num, "Whoosh", user_id, username, fullname)
         accepted_by_service["Whoosh"] += 1
         total_accepted_from_user += 1
 
+    # Поиск номеров Jet
     jet_numbers = JET_SCOOTER_PATTERN.findall(text_to_check)
     for num in jet_numbers:
         insert_scooter_record(num, "Jet", user_id, username, fullname)
         accepted_by_service["Jet"] += 1
         total_accepted_from_user += 1
 
+    # Поиск пакетных записей (например, "yandex 10")
     batch_text_matches = BATCH_TEXT_PATTERN.findall(text_to_check)
     timestamp_now_for_placeholder = datetime.datetime.now(TIMEZONE).strftime("%Y%m%d%H%M%S")
 
@@ -371,11 +397,13 @@ async def handle_allowed_chat_messages(message: types.Message) -> None:
                     accepted_by_service[service] += 1
                     total_accepted_from_user += 1
         except ValueError:
-            pass 
+            pass # Игнорируем некорректные пакетные записи
             
+    # Отправляем ответ пользователю, если что-то было принято
     if total_accepted_from_user > 0:
         response_parts = []
         user_mention_text = message.from_user.full_name
+        # Формируем упоминание пользователя
         if message.from_user.username:
             user_mention = f"@{message.from_user.username}"
         else:
@@ -392,34 +420,31 @@ async def handle_allowed_chat_messages(message: types.Message) -> None:
         final_response = "\n".join(response_parts)
         await message.reply(final_response, parse_mode=types.ParseMode.HTML)
 
-# НОВЫЙ ОБРАБОТЧИК: Ловит все сообщения, которые не были обработаны ранее.
-# Этот обработчик будет срабатывать для сообщений из неразрешенных чатов (групп)
-# или для любых сообщений в личке от не-админов, которые не являются командами.
+# Универсальный обработчик для всех сообщений, которые не были обработаны предыдущими.
+# Он должен быть ПОСЛЕДНИМ в файле, чтобы не перехватывать другие хендлеры.
 @dp.message_handler(content_types=types.ContentType.ANY)
 async def handle_unallowed_messages(message: types.Message) -> None:
-    # Если это приватный чат и не админ
+    # Если это приватный чат и отправитель НЕ админ
     if message.chat.type == types.ChatType.PRIVATE and message.from_user.id not in ADMIN_IDS:
         await message.answer("Извините, я принимаю номера самокатов только в разрешенных группах. Администраторы могут использовать меня в личке.")
     # Если это групповой чат, но его ID нет в списке ALLOWED_CHAT_IDS
     elif message.chat.type in [types.ChatType.GROUP, types.ChatType.SUPERGROUP] and message.chat.id not in ALLOWED_CHAT_IDS:
-        # Можно здесь ничего не отвечать, чтобы не спамить в "чужой" группе,
-        # или дать краткое объяснение, но это может быть нежелательно.
-        # Например:
-        # await message.answer("Этот бот не предназначен для работы в этой группе.")
-        pass # Лучше игнорировать, чтобы не показывать активность в нежелательных группах.
-    # Если это админ, и его сообщение не было обработано (например, неверная команда)
+        # Для неразрешенных групп лучше ничего не отвечать, чтобы не показывать активность и не спамить.
+        pass 
+    # Если это админ, и его сообщение не было обработано (например, некорректная команда, или просто случайный текст)
     elif message.from_user.id in ADMIN_IDS:
-        # Можно здесь добавить логику для админов, если они отправили что-то не то
-        pass
+        pass # Админы могут получать неответы на случайные сообщения
     else:
-        # Все остальные случаи, например, неадмин в приватном чате, но не текст
+        # Все остальные случаи (редкие, например, неизвестный тип контента)
         pass
 
+# --- ЗАПУСК БОТА ---
 async def main() -> None:
-    init_db()
+    init_db() # Инициализируем базу данных при запуске
     print("Бот запускается...")
+    # Начинаем опрос Telegram API
     await dp.start_polling()
     print("Бот остановлен.")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main()) # Запускаем асинхронную функцию main
