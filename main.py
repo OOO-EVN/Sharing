@@ -6,7 +6,7 @@ import datetime
 from io import BytesIO
 
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart, Command, CommandObject 
 from aiogram.enums import ParseMode
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -31,9 +31,12 @@ YANDEX_SCOOTER_PATTERN = re.compile(r'\b\d{8}\b')
 WOOSH_SCOOTER_PATTERN = re.compile(r'\b[A-Z]{2}\d{4}\b', re.IGNORECASE)
 JET_SCOOTER_PATTERN = re.compile(r'\b\d{6}\b')
 
+# НОВОЕ: Регулярное выражение для распознавания пакетных записей в свободном тексте
+BATCH_TEXT_PATTERN = re.compile(r'(yandex|whoosh|jet)\s+(\d+)', re.IGNORECASE)
+
 # --- ИНИЦИАЛИЗАЦИЯ ---
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(parse_mode=ParseMode.HTML) # ParseMode.HTML остается, т.к. используется для упоминаний по ID
+dp = Dispatcher(parse_mode=ParseMode.HTML) 
 
 # --- ФУНКЦИИ БАЗЫ ДАННЫХ ---
 def init_db():
@@ -84,14 +87,67 @@ def is_admin(user_id: int) -> bool:
 async def command_start_handler(message: types.Message) -> None:
     await message.answer(f"Привет, {message.from_user.full_name}! Я готов принимать самокаты.")
 
-# --- КОМАНДЫ АДМИНИСТРАТОРА ---
+# --- КОМАНДА ДЛЯ ПАКЕТНОЙ СДАЧИ (остается как опция) ---
+@dp.message(Command("batch_accept"))
+async def batch_accept_handler(message: types.Message, command: CommandObject) -> None:
+    """
+    Принимает пакетную сдачу самокатов: /batch_accept <сервис> <количество>
+    """
+    args = command.args.split()
+    if len(args) != 2:
+        await message.reply("Используйте команду в формате: /batch_accept <сервис> <количество>\nНапример: /batch_accept Yandex 20")
+        return
+
+    service_raw = args[0].lower() 
+    quantity_str = args[1]
+
+    service_map = {
+        "yandex": "Яндекс",
+        "whoosh": "Whoosh",
+        "jet": "Jet"
+    }
+
+    service = service_map.get(service_raw)
+
+    if not service:
+        await message.reply("Неизвестный сервис. Доступные сервисы: Yandex, Whoosh, Jet.")
+        return
+
+    try:
+        quantity = int(quantity_str)
+        if quantity <= 0:
+            raise ValueError("Количество должно быть положительным числом.")
+    except ValueError:
+        await message.reply("Количество должно быть положительным числом.")
+        return
+
+    user_id = message.from_user.id
+    username = message.from_user.username
+    fullname = message.from_user.full_name
+
+    accepted_count = 0
+    timestamp_now = datetime.datetime.now().strftime("%Y%m%d%H%M%S") 
+
+    for i in range(quantity):
+        placeholder_number = f"{service.upper()}_BATCH_{timestamp_now}_{i+1}"
+        insert_scooter_record(placeholder_number, service, user_id, username, fullname)
+        accepted_count += 1
+
+    user_mention_text = message.from_user.full_name
+    if message.from_user.username:
+        user_mention = f"@{message.from_user.username}"
+    else:
+        user_mention = f"<a href='tg://user?id={message.from_user.id}'>{user_mention_text}</a>"
+
+    await message.reply(
+        f"{user_mention}, принято {accepted_count} самокатов сервиса {service} в качестве пакетной сдачи."
+    )
+
+
+# --- КОМАНДЫ АДМИНИСТРАТОРА (без изменений) ---
 
 @dp.message(lambda message: is_admin(message.from_user.id), Command("today_stats"))
 async def admin_today_stats_handler(message: types.Message) -> None:
-    """
-    Показывает администратору статистику по принятым самокатам за текущий день,
-    с группировкой по пользователям.
-    """
     records = get_scooter_records(date_filter='today')
     
     if not records:
@@ -119,7 +175,6 @@ async def admin_today_stats_handler(message: types.Message) -> None:
         display_name = user_data['display_name']
         services_stats = user_data['services']
         
-        # УДАЛЕНЫ ТЕГИ <b> </b>
         response_parts.append(f"{display_name} Статистика за сегодня:")
         
         user_total = 0
@@ -136,7 +191,6 @@ async def admin_today_stats_handler(message: types.Message) -> None:
 
     final_response = "\n".join(response_parts)
     
-    # УДАЛЕНЫ ТЕГИ <b> </b>
     final_response += f"\n---\nОбщий итог за сегодня: {total_all_users} шт."
     
     await message.answer(final_response)
@@ -166,7 +220,7 @@ async def admin_export_all_excel_handler(message: types.Message) -> None:
     excel_file = create_excel_report(records, "Полный отчет")
     filename = f"full_report_{datetime.date.today().isoformat()}.xlsx"
     await message.answer_document(types.FSInputFile(excel_file, filename=filename))
-    await message.answer("Полный отчет готов.")
+    await message.answer("Отчет готов.")
 
 
 def create_excel_report(records, sheet_name):
@@ -177,7 +231,7 @@ def create_excel_report(records, sheet_name):
     headers = ["ID", "Номер Самоката", "Сервис", "ID Пользователя", "Имя пользователя (ник)", "Полное имя пользователя", "Время Принятия"]
     ws.append(headers)
 
-    header_font = Font(bold=True)
+    header_font = Font(bold=True) 
     for cell in ws[1]:
         cell.font = header_font
         cell.alignment = Alignment(horizontal='center', vertical='center')
@@ -212,56 +266,86 @@ async def handle_all_messages(message: types.Message) -> None:
     if message.caption:
         text_to_check += " " + message.caption
 
-    if text_to_check:
-        response_parts = []
+    if not text_to_check.strip(): # Проверяем, что текст не пустой или состоит только из пробелов
+        return # Если сообщение пустое, ничего не делаем
+
+    # Словарь для приведения сервиса к нужному формату для БД
+    service_map = {
+        "yandex": "Яндекс",
+        "whoosh": "Whoosh",
+        "jet": "Jet"
+    }
+
+    user_id = message.from_user.id
+    username = message.from_user.username
+    fullname = message.from_user.full_name
+
+    total_accepted_from_user = 0
+    # Отслеживаем количество по каждому сервису для ответа
+    accepted_by_service = {"Яндекс": 0, "Whoosh": 0, "Jet": 0}
+
+    # --- 1. Обработка ИНДИВИДУАЛЬНЫХ номеров самокатов (как и раньше) ---
+    yandex_numbers = YANDEX_SCOOTER_PATTERN.findall(text_to_check)
+    for num in yandex_numbers:
+        insert_scooter_record(num, "Яндекс", user_id, username, fullname)
+        accepted_by_service["Яндекс"] += 1
+        total_accepted_from_user += 1
+
+    woosh_numbers = WOOSH_SCOOTER_PATTERN.findall(text_to_check)
+    for num in woosh_numbers:
+        insert_scooter_record(num, "Whoosh", user_id, username, fullname)
+        accepted_by_service["Whoosh"] += 1
+        total_accepted_from_user += 1
+
+    jet_numbers = JET_SCOOTER_PATTERN.findall(text_to_check)
+    for num in jet_numbers:
+        insert_scooter_record(num, "Jet", user_id, username, fullname)
+        accepted_by_service["Jet"] += 1
+        total_accepted_from_user += 1
+
+    # --- 2. Обработка ПАКЕТНЫХ записей из текста (НОВОЕ) ---
+    batch_text_matches = BATCH_TEXT_PATTERN.findall(text_to_check)
+    timestamp_now = datetime.datetime.now().strftime("%Y%m%d%H%M%S") # Единая метка для пакета
+
+    for match in batch_text_matches:
+        service_raw = match[0].lower()
+        quantity_str = match[1]
         
-        user_id = message.from_user.id
-        username = message.from_user.username
-        fullname = message.from_user.full_name
-
-        total_accepted_from_user = 0
-
-        yandex_numbers = YANDEX_SCOOTER_PATTERN.findall(text_to_check)
-        yandex_count = len(yandex_numbers)
-        if yandex_count > 0:
-            response_parts.append(f"Яндекс: {yandex_count}")
-            total_accepted_from_user += yandex_count
-            for num in yandex_numbers:
-                insert_scooter_record(num, "Яндекс", user_id, username, fullname)
-
-        woosh_numbers = WOOSH_SCOOTER_PATTERN.findall(text_to_check)
-        woosh_count = len(woosh_numbers)
-        if woosh_count > 0:
-            response_parts.append(f"Whoosh: {woosh_count}")
-            total_accepted_from_user += woosh_count
-            for num in woosh_numbers:
-                insert_scooter_record(num, "Whoosh", user_id, username, fullname)
-
-        jet_numbers = JET_SCOOTER_PATTERN.findall(text_to_check)
-        jet_count = len(jet_numbers)
-        if jet_count > 0:
-            response_parts.append(f"Jet: {jet_count}")
-            total_accepted_from_user += jet_count
-            for num in jet_numbers:
-                insert_scooter_record(num, "Jet", user_id, username, fullname)
-
-        if response_parts:
-            user_mention_text = message.from_user.full_name
-            if message.from_user.username:
-                user_mention = f"@{message.from_user.username}"
-            else:
-                user_mention = f"<a href='tg://user?id={message.from_user.id}'>{user_mention_text}</a>"
-
-            # Теги <b> здесь остались, так как они относятся к ответу пользователя,
-            # а не к админской статистике. Если вы хотите убрать их и здесь, скажите.
-            if total_accepted_from_user > 0:
-                main_message = f"<b>{user_mention}, принято от тебя {total_accepted_from_user} шт.:</b>"
-            else:
-                main_message = f"<b>{user_mention}, принято от тебя:</b>"
+        service = service_map.get(service_raw)
+        
+        try:
+            quantity = int(quantity_str)
+            if quantity > 0:
+                for i in range(quantity):
+                    # Генерируем уникальный номер-заглушку для каждой записи в пакете
+                    placeholder_number = f"{service.upper()}_BATCH_{timestamp_now}_{i+1}"
+                    insert_scooter_record(placeholder_number, service, user_id, username, fullname)
+                    accepted_by_service[service] += 1
+                    total_accepted_from_user += 1
+        except ValueError:
+            # Игнорируем неверные количества, не ломаем обработку других записей
+            pass 
             
-            final_response = main_message + "\n" + "\n".join(response_parts)
-            
-            await message.reply(final_response)
+    # --- Формирование ответа ---
+    if total_accepted_from_user > 0:
+        response_parts = []
+        user_mention_text = message.from_user.full_name
+        if message.from_user.username:
+            user_mention = f"@{message.from_user.username}"
+        else:
+            user_mention = f"<a href='tg://user?id={message.from_user.id}'>{user_mention_text}</a>"
+
+        main_message = f"{user_mention}, принято от тебя {total_accepted_from_user} шт.:"
+        response_parts.append(main_message)
+
+        # Добавляем детализацию по сервисам, только если есть принятые самокаты по ним
+        for service_name in ["Яндекс", "Whoosh", "Jet"]:
+            count = accepted_by_service[service_name]
+            if count > 0:
+                response_parts.append(f"{service_name}: {count}")
+        
+        final_response = "\n".join(response_parts)
+        await message.reply(final_response)
 
 # --- ЗАПУСК БОТА ---
 async def main() -> None:
