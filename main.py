@@ -51,27 +51,18 @@ class IsAdminFilter(BoundFilter):
     def __init__(self, is_admin):
         self.is_admin = is_admin
     async def check(self, message: types.Message):
-        is_admin_check = message.from_user.id in ADMIN_IDS
-        print(f"DEBUG: IsAdminFilter check for user {message.from_user.id}: {is_admin_check}")
-        return is_admin_check
+        return message.from_user.id in ADMIN_IDS
 
 class IsAllowedChatFilter(BoundFilter):
     key = 'is_allowed_chat'
     def __init__(self, is_allowed_chat):
         self.is_allowed_chat = is_allowed_chat
     async def check(self, message: types.Message):
-        if not self.is_allowed_chat:
-            return False # Should not happen if filter is correctly used
-        
-        # If private chat AND sender is admin, it's allowed
+        # Если чат личный и отправитель админ, то он разрешен
         if message.chat.type == types.ChatType.PRIVATE and message.from_user.id in ADMIN_IDS:
-            print(f"DEBUG: IsAllowedChatFilter check for chat {message.chat.id} (Private, Admin): True")
             return True
-        
-        # If group chat AND its ID is in the allowed list
-        is_allowed_group = message.chat.id in ALLOWED_CHAT_IDS
-        print(f"DEBUG: IsAllowedChatFilter check for chat {message.chat.id} (Group): {is_allowed_group}")
-        return is_allowed_group
+        # Если чат групповой и его ID в списке разрешенных
+        return message.chat.id in ALLOWED_CHAT_IDS
 
 # Регистрация фильтров
 dp.filters_factory.bind(IsAdminFilter)
@@ -110,7 +101,6 @@ def insert_scooter_record(scooter_number, service, user_id, username, fullname):
     ''', (scooter_number, service, user_id, username, fullname, timestamp_str))
     conn.commit()
     conn.close()
-    print(f"DEBUG: Scooter record inserted: {scooter_number} by {fullname} ({user_id})")
 
 def get_scooter_records(date_filter=None):
     conn = sqlite3.connect(DB_NAME)
@@ -128,7 +118,6 @@ def get_scooter_records(date_filter=None):
 
 @dp.message_handler(commands=['start'])
 async def command_start_handler(message: types.Message) -> None:
-    print(f"DEBUG: /start command received from user {message.from_user.id} in chat {message.chat.id}")
     allowed_chats_info = ', '.join(map(str, ALLOWED_CHAT_IDS)) if ALLOWED_CHAT_IDS else "не указаны (бот принимает номера только от админов)"
     
     response = (f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
@@ -140,10 +129,12 @@ async def command_start_handler(message: types.Message) -> None:
                )
     await message.answer(response, parse_mode=types.ParseMode.MARKDOWN)
 
-@dp.message_handler(commands=['batch_accept'], is_admin=True) # Admin can use anywhere
-@dp.message_handler(commands=['batch_accept'], is_allowed_chat=True) # Non-admin can use in allowed chats
+# Прием пакетной сдачи:
+# Админы могут использовать эту команду в любом чате (is_admin=True)
+# Обычные пользователи могут использовать в разрешенных чатах (is_allowed_chat=True)
+@dp.message_handler(commands=['batch_accept'], is_admin=True) # Админы могут использовать везде
+@dp.message_handler(commands=['batch_accept'], is_allowed_chat=True) # Обычные пользователи в разрешенных чатах
 async def batch_accept_handler(message: types.Message) -> None:
-    print(f"DEBUG: /batch_accept command received from user {message.from_user.id} in chat {message.chat.id}")
     args = message.get_args().split()
     if len(args) != 2:
         await message.reply("Используйте команду в формате: `/batch_accept <сервис> <количество>`\nНапример: `/batch_accept Yandex 20`", parse_mode=types.ParseMode.MARKDOWN)
@@ -195,14 +186,13 @@ async def batch_accept_handler(message: types.Message) -> None:
         parse_mode=types.ParseMode.HTML
     )
 
+# Админские команды для статистики и экспорта (ТОЛЬКО для админов, в любом чате)
 @dp.message_handler(commands=['today_stats', 'export_today_excel', 'export_all_excel'], is_admin=True)
 async def admin_commands_handler(message: types.Message) -> None:
-    print(f"DEBUG: Admin command '{message.get_command()}' received from user {message.from_user.id} in chat {message.chat.id}")
     command = message.get_command()
 
     if command == '/today_stats':
         records = get_scooter_records(date_filter='today')
-        
         if not records:
             await message.answer("Сегодня пока ничего не принято.", parse_mode=types.ParseMode.HTML)
             return
@@ -271,6 +261,7 @@ async def admin_commands_handler(message: types.Message) -> None:
         await bot.send_document(chat_id=message.chat.id, document=types.InputFile(excel_file, filename=filename))
         await message.answer("Полный отчет готов.", parse_mode=types.ParseMode.HTML)
 
+# Функция для создания Excel-отчета
 def create_excel_report(records, sheet_name):
     wb = Workbook()
     ws = wb.active
@@ -315,12 +306,10 @@ def create_excel_report(records, sheet_name):
     buffer.seek(0)
     return buffer
 
-# Handler for messages containing scooter numbers (for allowed users in allowed chats)
-@dp.message_handler(content_types=[types.ContentType.TEXT, types.ContentType.PHOTO, types.ContentType.DOCUMENT, types.ContentType.VIDEO, types.ContentType.ANIMATION], 
-                    is_allowed_chat=True, 
-                    func=lambda message: not message.is_command() and (re.search(r'\b\d{6,8}\b', message.text if message.text else message.caption) is not None))
+# Обработчик для сообщений, содержащих номера самокатов (для ВСЕХ, кто имеет право)
+# Этот обработчик должен срабатывать ТОЛЬКО если чат разрешен И это НЕ команда (чтобы команды не перехватывались)
+@dp.message_handler(content_types=[types.ContentType.TEXT, types.ContentType.PHOTO, types.ContentType.DOCUMENT, types.ContentType.VIDEO, types.ContentType.ANIMATION], is_allowed_chat=True, text_contains=re.compile(r'^\D*\d{6,8}\D*$'), func=lambda message: not message.is_command())
 async def handle_scooter_numbers(message: types.Message) -> None:
-    print(f"DEBUG: handle_scooter_numbers triggered for user {message.from_user.id} in chat {message.chat.id}. Text: '{message.text or message.caption}'")
     text_to_check = message.text if message.text else message.caption
 
     if not text_to_check or not text_to_check.strip(): 
@@ -395,51 +384,40 @@ async def handle_scooter_numbers(message: types.Message) -> None:
         
         final_response = "\n".join(response_parts)
         await message.reply(final_response, parse_mode=types.ParseMode.HTML)
-    else:
-        # If the message got here but no numbers were found by the patterns
-        # This can happen if the text_contains filter was too broad
-        print(f"DEBUG: handle_scooter_numbers found no valid numbers in '{text_to_check}'.")
 
-
+# Универсальный обработчик для всех сообщений, которые не были обработаны предыдущими.
+# Он должен быть ПОСЛЕДНИМ в файле, чтобы не перехватывать другие хендлеры.
 @dp.message_handler(content_types=types.ContentType.ANY)
 async def handle_unallowed_messages(message: types.Message) -> None:
-    print(f"DEBUG: handle_unallowed_messages triggered for user {message.from_user.id} in chat {message.chat.id}. Type: {message.chat.type}")
-    
-    # Ignore messages from the bot itself
+    # Игнорируем сообщения от самого бота
     if message.from_user.id == bot.id:
-        print(f"DEBUG: Ignoring message from self: {message.text or message.caption}")
         return
     
-    # Case 1: Private chat and sender is NOT an admin
+    # Если это приватный чат и отправитель НЕ админ
     if message.chat.type == types.ChatType.PRIVATE and message.from_user.id not in ADMIN_IDS:
-        print(f"DEBUG: Private chat, non-admin user {message.from_user.id}. Replying...")
         await message.answer("Извините, я принимаю номера самокатов только в разрешенных группах. Администраторы могут использовать меня в личке.")
-    
-    # Case 2: Group chat, chat ID is NOT in ALLOWED_CHAT_IDS, AND sender is NOT an admin
+    # Если это групповой чат, и его ID нет в списке ALLOWED_CHAT_IDS
+    # И это НЕ админ (админы могут использовать команды везде)
     elif message.chat.type in [types.ChatType.GROUP, types.ChatType.SUPERGROUP] and \
          message.chat.id not in ALLOWED_CHAT_IDS and \
          message.from_user.id not in ADMIN_IDS:
-        print(f"DEBUG: Unauthorized group chat {message.chat.id}, non-admin user {message.from_user.id}. Silently ignoring.")
-        # Silently ignore to avoid spamming unauthorized groups
+        # Для неразрешенных групп от не-админов лучше ничего не отвечать, чтобы не спамить.
         pass 
-    
-    # Case 3: Message from an admin (but it wasn't a command or a recognized scooter number message)
+    # Если сообщение от админа (но оно не было командой и не содержало номера, которые обработались ранее)
     elif message.from_user.id in ADMIN_IDS:
-        print(f"DEBUG: Admin user {message.from_user.id} sent unhandled message in chat {message.chat.id}. Ignoring silently.")
-        pass 
-    
-    # Case 4: Any other unhandled case (e.g., in allowed chat but not a number, or weird content type)
+        pass # Админы могут получать неответы на случайные сообщения, не предназначенные для бота
     else:
-        print(f"DEBUG: Unhandled message from user {message.from_user.id} in chat {message.chat.id}. Content: '{message.text or message.caption}'")
+        # Все остальные случаи (редкие, например, неизвестный тип контента или сообщения из разрешенного чата,
+        # которые не попали под логику номеров/команд)
         pass
-
 
 # --- ЗАПУСК БОТА ---
 async def main() -> None:
-    init_db()
+    init_db() # Инициализируем базу данных при запуске
     print("Бот запускается...")
-    await dp.start_polling()
+    # Начинаем опрос Telegram API
+    await dp.start_polling() # Используем dp.start_polling() для запуска
     print("Бот остановлен.")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main()) # Запускаем асинхронную функцию main
