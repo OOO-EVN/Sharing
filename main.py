@@ -41,13 +41,13 @@ YANDEX_SCOOTER_PATTERN = re.compile(r'\b(\d{8})\b')
 WOOSH_SCOOTER_PATTERN = re.compile(r'\b([A-ZА-Я]{2}\d{4})\b', re.IGNORECASE)
 JET_SCOOTER_PATTERN = re.compile(r'\b(\d{3}-?\d{3})\b')
 
-BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|yandex|вуш|джет|яндекс|w|j|y)\s+(\d+)\b', re.IGNORECASE)
+BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|yandex|вуш|джет|яндекс)\s+(\d+)\b', re.IGNORECASE)
 SERVICE_ALIASES = {
-    "yandex": "Яндекс", "яндекс": "Яндекс", "y": "Яндекс",
-    "whoosh": "Whoosh", "вуш": "Whoosh", "w": "Whoosh",
-    "jet": "Jet", "джет": "Jet", "j": "Jet"
+    "yandex": "Яндекс", "яндекс": "Яндекс",
+    "whoosh": "Whoosh", "вуш": "Whoosh",
+    "jet": "Jet", "джет": "Jet"
 }
-SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"} # This map is not used in the provided code, but kept for consistency if it's used elsewhere.
+SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"}
 
 bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher()
@@ -134,7 +134,7 @@ async def command_start_handler(message: Message):
     response = (
         f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
         f"Просто отправь мне номер самоката, и я его учту.\n"
-        f"Для пакетного приёма используй формат: `сервис количество` (например, `Яндекс 10`, `y 5`, `Whoosh 15`, `w 20`).\n\n"
+        f"Для пакетного приёма используй формат: `сервис количество` (например, `Яндекс 10`).\n\n"
         f"Я работаю в группах с ID: `{allowed_chats_info}` и в личных сообщениях с администраторами.\n"
         f"Твой ID чата: `{message.chat.id}`"
     )
@@ -143,7 +143,7 @@ async def command_start_handler(message: Message):
 @dp.message(Command("batch_accept"), IsAllowedChatFilter())
 async def batch_accept_handler(message: Message, command: CommandObject):
     if command.args is None:
-        await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20` или `/batch_accept y 20`", parse_mode="Markdown")
+        await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20`", parse_mode="Markdown")
         return
 
     args = command.args.split()
@@ -155,7 +155,7 @@ async def batch_accept_handler(message: Message, command: CommandObject):
     service = SERVICE_ALIASES.get(service_raw.lower())
 
     if not service:
-        await message.reply("Неизвестный сервис. Доступны: `Yandex` (`y`), `Whoosh` (`w`), `Jet` (`j`).", parse_mode="Markdown")
+        await message.reply("Неизвестный сервис. Доступны: `Yandex`, `Whoosh`, `Jet`.", parse_mode="Markdown")
         return
     try:
         quantity = int(quantity_str)
