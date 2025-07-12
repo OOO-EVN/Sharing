@@ -13,15 +13,15 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject, BaseFilter
 from aiogram.types import Message
 from aiogram import F
-from aiogram.enums import ParseMode # Импортируем ParseMode
-from dotenv import load_dotenv # Убедитесь, что это импортировано
+from aiogram.enums import ParseMode
+from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.styles import Font
-from typing import List, Tuple # Убедитесь, что это импортировано
+from typing import List, Tuple
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-load_dotenv() # Здесь теперь не будет NameError
+load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 if not BOT_TOKEN:
@@ -50,9 +50,7 @@ SERVICE_ALIASES = {
 }
 SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"} 
 
-# Инициализация бота с default_parse_mode
-bot = Bot(token=BOT_TOKEN, default_parse_mode=ParseMode.HTML) # Исправлено
-
+bot = Bot(token=BOT_TOKEN, default_parse_mode=ParseMode.HTML)
 dp = Dispatcher()
 db_executor = ThreadPoolExecutor(max_workers=5)
 
@@ -106,7 +104,7 @@ def init_db():
     run_db_query("CREATE INDEX IF NOT EXISTS idx_user_service ON accepted_scooters (accepted_by_user_id, service);")
     logging.info("База данных успешно инициализирована.")
 
-def insert_batch_records(records_data: List[Tuple]): # Исправлено: List[Tuple]
+def insert_batch_records(records_data: List[Tuple]):
     conn = None
     try:
         conn = sqlite3.connect(DB_NAME, timeout=10)
@@ -123,7 +121,7 @@ def insert_batch_records(records_data: List[Tuple]): # Исправлено: Lis
         if conn:
             conn.close()
 
-async def db_write_batch(records_data: List[Tuple]): # Исправлено: List[Tuple]
+async def db_write_batch(records_data: List[Tuple]):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(db_executor, insert_batch_records, records_data)
 
@@ -201,17 +199,22 @@ async def today_stats_handler(message: Message):
         if user_id not in user_info:
             user_info[user_id] = f"@{username}" if username else fullname
 
-    response_parts = ["<b>Статистика за сегодня:</b>"]
-    total_all_users = 0
+    response_parts = [] # Убрана строка "Статистика за сегодня:"
+    total_all_users = 0 # Эта переменная нужна для расчета, но не для вывода в этом формате
 
     for user_id, services in user_stats.items():
         user_total = sum(services.values())
-        total_all_users += user_total
-        response_parts.append(f"\n<b>{user_info[user_id]}</b> - всего: {user_total} шт.")
+        total_all_users += user_total # Обновляем общий итог, если он нужен для других целей, но не выводим
+        
+        # Формируем упоминание или имя
+        user_display_name = user_info[user_id]
+        
+        # Добавляем строку с упоминанием и общим количеством для этого пользователя
+        response_parts.append(f"{user_display_name} - всего: {user_total} шт.")
         for service, count in sorted(services.items()):
-            response_parts.append(f"  - {service}: {count} шт.")
+            response_parts.append(f"  - <b>{service}</b>: {count} шт.")
 
-    response_parts.append(f"\n<b>Общий итог за сегодня: {total_all_users} шт.</b>")
+    # Убрана строка с "Общий итог за сегодня: {total_all_users} шт."
     await message.answer("\n".join(response_parts))
 
 @dp.message(Command("export_today_excel", "export_all_excel"), IsAdminFilter())
@@ -238,7 +241,7 @@ async def export_excel_handler(message: Message, command: CommandObject):
     filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
     await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
 
-def create_excel_report(records: List[Tuple]) -> BytesIO: # Исправлено: List[Tuple]
+def create_excel_report(records: List[Tuple]) -> BytesIO:
     wb = Workbook()
     ws = wb.active
     ws.title = "Данные"
@@ -309,10 +312,7 @@ async def handle_scooter_numbers(message: Message):
     records_to_insert = []
     accepted_summary = defaultdict(int)
     
-    # Сначала найдем и обработаем все пакетные совпадения
     batch_matches = BATCH_QUANTITY_PATTERN.findall(text)
-    
-    # Создаем временную копию текста для удаления пакетных команд
     temp_text_for_numbers = text
 
     if batch_matches:
@@ -326,19 +326,11 @@ async def handle_scooter_numbers(message: Message):
                         records_to_insert.append((placeholder_number, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
                     accepted_summary[service] += quantity
                     
-                    # Удаляем только что обработанную пакетную команду из temp_text_for_numbers
-                    # Используем re.sub с count=1 для удаления только первого найденного совпадения
-                    # Убедитесь, что `service_raw` и `quantity_str` соответствуют тому, что вы хотите удалить.
-                    # Возможно, лучше удалить полное совпадение из original_text, а не только часть.
-                    # Для надежности можно использовать Span из re.finditer, но это усложнит код.
-                    # Текущий подход `re.sub(re.escape(f"{service_raw} {quantity_str}")` должен работать,
-                    # если строка точно совпадает с паттерном.
                     temp_text_for_numbers = re.sub(re.escape(f"{service_raw} {quantity_str}"), '', temp_text_for_numbers, 1, re.IGNORECASE).strip()
 
             except (ValueError, TypeError):
                 continue
         
-    # Теперь, после обработки пакетных команд, обрабатываем оставшийся текст на наличие отдельных номеров
     text_for_individual_numbers = temp_text_for_numbers
 
     patterns = {
@@ -350,7 +342,7 @@ async def handle_scooter_numbers(message: Message):
     processed_numbers = set()
 
     for service, pattern in patterns.items():
-        numbers = pattern.findall(text_for_individual_numbers) # Ищем в очищенном тексте
+        numbers = pattern.findall(text_for_individual_numbers)
         for num in numbers:
             clean_num = num.replace('-', '') if service == "Jet" else num.upper()
             
