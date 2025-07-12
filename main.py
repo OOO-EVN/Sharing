@@ -18,7 +18,7 @@ from aiogram.enums import ParseMode
 from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.styles import Font
-from typing import List, Tuple # Добавьте эту строку
+from typing import List, Tuple # Убедитесь, что это импортировано
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -105,7 +105,6 @@ def init_db():
     run_db_query("CREATE INDEX IF NOT EXISTS idx_user_service ON accepted_scooters (accepted_by_user_id, service);")
     logging.info("База данных успешно инициализирована.")
 
-# ИЗМЕНЕНА ЭТА СТРОКА
 def insert_batch_records(records_data: List[Tuple]):
     conn = None
     try:
@@ -123,7 +122,8 @@ def insert_batch_records(records_data: List[Tuple]):
         if conn:
             conn.close()
 
-async def db_write_batch(records_data: list[tuple]):
+# ИЗМЕНЕНА ЭТА СТРОКА
+async def db_write_batch(records_data: List[Tuple]):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(db_executor, insert_batch_records, records_data)
 
@@ -238,7 +238,7 @@ async def export_excel_handler(message: Message, command: CommandObject):
     filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
     await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
 
-def create_excel_report(records: List[Tuple]) -> BytesIO: # И здесь тоже
+def create_excel_report(records: List[Tuple]) -> BytesIO:
     wb = Workbook()
     ws = wb.active
     ws.title = "Данные"
