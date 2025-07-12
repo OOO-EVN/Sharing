@@ -14,7 +14,7 @@ from typing import List, Tuple
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.utils import executor
-from aiogram.dispatcher.filters import BoundFilter # Добавляем для создания классов фильтров
+from aiogram.dispatcher.filters import BoundFilter
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -55,8 +55,6 @@ bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
-# **ИСПРАВЛЕННЫЙ МЕТОД ФИЛЬТРОВ ДЛЯ AIOGRAM 2.X**
-# Создаем классы фильтров, наследующиеся от BoundFilter
 class IsAdminFilter(BoundFilter):
     async def check(self, message: types.Message) -> bool:
         return message.from_user.id in ADMIN_IDS
@@ -132,8 +130,8 @@ async def db_fetch_all(query: str, params: tuple = ()):
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(db_executor, run_db_query, query, params, 'all')
 
-# Регистрация обработчиков
-@dp.message_handler(commands="start", IsAllowedChatFilter()) # Передаем экземпляр фильтра
+# **ИСПРАВЛЕННЫЙ ПОРЯДОК АРГУМЕНТОВ В ДЕКОРАТОРАХ**
+@dp.message_handler(IsAllowedChatFilter(), commands="start") # Фильтр сначала, затем именованный аргумент
 async def command_start_handler(message: types.Message):
     allowed_chats_info = ', '.join(map(str, ALLOWED_CHAT_IDS)) if ALLOWED_CHAT_IDS else "не указаны"
     response = (
@@ -145,7 +143,7 @@ async def command_start_handler(message: types.Message):
     )
     await message.answer(response, parse_mode="Markdown")
 
-@dp.message_handler(commands="batch_accept", IsAllowedChatFilter())
+@dp.message_handler(IsAllowedChatFilter(), commands="batch_accept") # Фильтр сначала
 async def batch_accept_handler(message: types.Message):
     args = message.get_args().split()
     if len(args) != 2:
@@ -181,7 +179,7 @@ async def batch_accept_handler(message: types.Message):
     user_mention = types.User.get_mention(user)
     await message.reply(f"{user_mention}, принято {quantity} самокатов сервиса <b>{service}</b>.")
 
-@dp.message_handler(commands="today_stats", IsAdminFilter()) # Передаем экземпляр фильтра
+@dp.message_handler(IsAdminFilter(), commands="today_stats") # Фильтр сначала
 async def today_stats_handler(message: types.Message):
     today_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
     query = "SELECT service, accepted_by_user_id, accepted_by_username, accepted_by_fullname FROM accepted_scooters WHERE DATE(timestamp) = ?"
@@ -212,7 +210,7 @@ async def today_stats_handler(message: types.Message):
     response_parts.append(f"\n<b>Общий итог за сегодня: {total_all_users} шт.</b>")
     await message.answer("\n".join(response_parts))
 
-@dp.message_handler(commands=["export_today_excel", "export_all_excel"], IsAdminFilter()) # Передаем экземпляр фильтра
+@dp.message_handler(IsAdminFilter(), commands=["export_today_excel", "export_all_excel"]) # Фильтр сначала
 async def export_excel_handler(message: types.Message):
     is_today = message.get_command() == '/export_today_excel'
     date_filter = ' за сегодня' if is_today else ' за все время'
@@ -238,7 +236,6 @@ async def export_excel_handler(message: types.Message):
         filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
         
         logging.info(f"Попытка отправить Excel файл: {filename}, размер: {excel_file.getbuffer().nbytes} байт.")
-        # В aiogram 2.x types.InputFile работает с BytesIO напрямую
         await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
         logging.info(f"Excel файл {filename} успешно отправлен.")
     except Exception as e:
@@ -304,7 +301,7 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
     buffer.seek(0)
     return buffer
 
-@dp.message_handler(content_types=types.ContentTypes.TEXT, IsAllowedChatFilter())
+@dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.TEXT) # Фильтр сначала
 async def handle_scooter_numbers(message: types.Message):
     text = message.text
     if not text:
@@ -391,6 +388,4 @@ async def on_shutdown(dispatcher: Dispatcher):
     logging.info("Бот остановлен.")
 
 if __name__ == "__main__":
-    # В aiogram 2.x фильтры, наследующие от BoundFilter, можно передавать прямо в декоратор
-    # Нет необходимости в dp.filters_factory.bind() для этого способа.
     executor.start_polling(dp, on_startup=on_startup, on_shutdown=on_shutdown, skip_updates=True)
