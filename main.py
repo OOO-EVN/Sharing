@@ -8,14 +8,12 @@ import pytz
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
-from typing import List, Tuple
+from typing import List, Tuple # Остается, так как вы, вероятно, используете Python < 3.9
 
+# Изменения для aiogram 2.x
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command, CommandObject, BaseFilter
-from aiogram.types import Message, FSInputFile
-from aiogram import F
-from aiogram.client.default import DefaultBotProperties
-from aiogram.exceptions import TelegramNetworkError, AiogramError # Добавляем для перехвата ошибок Telegram
+from aiogram.contrib.fsm_storage.memory import MemoryStorage # Часто используется в aiogram 2.x, хотя и не обязательно для вашего бота
+from aiogram.utils import executor # Для запуска бота в aiogram 2.x
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -52,22 +50,28 @@ SERVICE_ALIASES = {
 }
 SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"}
 
-bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
-dp = Dispatcher()
+# Изменения для aiogram 2.x: Инициализация бота и диспетчера
+bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+storage = MemoryStorage() # Используем MemoryStorage, если нужен FSM, иначе можно убрать
+dp = Dispatcher(bot, storage=storage) # Передаем bot и storage в Dispatcher
+
 db_executor = ThreadPoolExecutor(max_workers=5)
 
-class IsAdminFilter(BaseFilter):
-    async def __call__(self, message: Message) -> bool:
-        return message.from_user.id in ADMIN_IDS
+# В aiogram 2.x фильтры обычно не наследуются от BaseFilter таким образом для @dp.message_handler
+# Они либо встроены, либо кастомные функции/классы, используемые как аргументы handler'а.
+# Но для вашего случая, где фильтр простой, мы можем использовать его как функцию.
 
-class IsAllowedChatFilter(BaseFilter):
-    async def __call__(self, message: Message) -> bool:
-        if message.chat.type == 'private' and message.from_user.id in ADMIN_IDS:
-            return True
-        if message.chat.type in ['group', 'supergroup'] and message.chat.id in ALLOWED_CHAT_IDS:
-            return True
-        logging.warning(f"Сообщение от {message.from_user.id} в чате {message.chat.id} было заблокировано фильтром.")
-        return False
+# Вариант 1: Использование кастомной функции-фильтра
+async def is_admin(message: types.Message) -> bool:
+    return message.from_user.id in ADMIN_IDS
+
+async def is_allowed_chat(message: types.Message) -> bool:
+    if message.chat.type == 'private' and message.from_user.id in ADMIN_IDS:
+        return True
+    if message.chat.type in ['group', 'supergroup'] and message.chat.id in ALLOWED_CHAT_IDS:
+        return True
+    logging.warning(f"Сообщение от {message.from_user.id} в чате {message.chat.id} было заблокировано фильтром.")
+    return False
 
 def run_db_query(query: str, params: tuple = (), fetch: str = None):
     conn = None
@@ -131,8 +135,9 @@ async def db_fetch_all(query: str, params: tuple = ()):
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(db_executor, run_db_query, query, params, 'all')
 
-@dp.message(Command("start"), IsAllowedChatFilter())
-async def command_start_handler(message: Message):
+# Изменения для aiogram 2.x: Регистрация обработчиков
+@dp.message_handler(commands="start", check_is_allowed_chat=True) # Используем check_is_allowed_chat для фильтра
+async def command_start_handler(message: types.Message):
     allowed_chats_info = ', '.join(map(str, ALLOWED_CHAT_IDS)) if ALLOWED_CHAT_IDS else "не указаны"
     response = (
         f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
@@ -143,15 +148,12 @@ async def command_start_handler(message: Message):
     )
     await message.answer(response, parse_mode="Markdown")
 
-@dp.message(Command("batch_accept"), IsAllowedChatFilter())
-async def batch_accept_handler(message: Message, command: CommandObject):
-    if command.args is None:
-        await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20` или `/batch_accept y 20`", parse_mode="Markdown")
-        return
-
-    args = command.args.split()
+# Для команд с аргументами в aiogram 2.x используется filters.RegexpCommandsFilter или ручной парсинг
+@dp.message_handler(commands="batch_accept", check_is_allowed_chat=True)
+async def batch_accept_handler(message: types.Message): # command: CommandObject не нужен
+    args = message.get_args().split() # Получаем аргументы команды
     if len(args) != 2:
-        await message.reply("Неверный формат. Используйте: `/batch_accept <сервис> <количество>`", parse_mode="Markdown")
+        await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20` или `/batch_accept y 20`", parse_mode="Markdown")
         return
 
     service_raw, quantity_str = args
@@ -180,11 +182,11 @@ async def batch_accept_handler(message: Message, command: CommandObject):
 
     await db_write_batch(records_to_insert)
 
-    user_mention = user.mention_html()
+    user_mention = types.User.get_mention(user) # aiogram 2.x: user.mention_html() не всегда доступен напрямую, используем get_mention
     await message.reply(f"{user_mention}, принято {quantity} самокатов сервиса <b>{service}</b>.")
 
-@dp.message(Command("today_stats"), IsAdminFilter())
-async def today_stats_handler(message: Message):
+@dp.message_handler(commands="today_stats", check_is_admin=True) # Используем check_is_admin для фильтра
+async def today_stats_handler(message: types.Message):
     today_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
     query = "SELECT service, accepted_by_user_id, accepted_by_username, accepted_by_fullname FROM accepted_scooters WHERE DATE(timestamp) = ?"
     records = await db_fetch_all(query, (today_str,))
@@ -214,9 +216,9 @@ async def today_stats_handler(message: Message):
     response_parts.append(f"\n<b>Общий итог за сегодня: {total_all_users} шт.</b>")
     await message.answer("\n".join(response_parts))
 
-@dp.message(Command("export_today_excel", "export_all_excel"), IsAdminFilter())
-async def export_excel_handler(message: Message, command: CommandObject):
-    is_today = command.command == 'export_today_excel'
+@dp.message_handler(commands=["export_today_excel", "export_all_excel"], check_is_admin=True)
+async def export_excel_handler(message: types.Message):
+    is_today = message.get_command() == '/export_today_excel' # Получаем команду
     date_filter = ' за сегодня' if is_today else ' за все время'
     await message.answer(f"Формирую отчет{date_filter}...")
 
@@ -240,18 +242,12 @@ async def export_excel_handler(message: Message, command: CommandObject):
         filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
         
         logging.info(f"Попытка отправить Excel файл: {filename}, размер: {excel_file.getbuffer().nbytes} байт.")
-        await bot.send_document(message.chat.id, FSInputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
+        # В aiogram 2.x types.InputFile работает с BytesIO напрямую
+        await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
         logging.info(f"Excel файл {filename} успешно отправлен.")
-    except TelegramNetworkError as e:
-        logging.error(f"Сетевая ошибка при отправке Excel файла: {e}", exc_info=True)
-        await message.answer("Произошла сетевая ошибка при отправке отчета. Пожалуйста, попробуйте позже.")
-    except AiogramError as e:
-        logging.error(f"Ошибка aiogram при отправке Excel файла: {e}", exc_info=True)
-        await message.answer(f"Произошла ошибка при отправке отчета: {e}. Пожалуйста, свяжитесь с администратором.")
-    except Exception as e:
-        logging.error(f"Неизвестная ошибка при отправке Excel файла: {e}", exc_info=True)
-        await message.answer("Произошла непредвиденная ошибка при отправке отчета. Пожалуйста, свяжитесь с администратором.")
-
+    except Exception as e: # Catch all exceptions for now to log any issues
+        logging.error(f"Ошибка при отправке Excel файла: {e}", exc_info=True)
+        await message.answer("Произошла ошибка при отправке отчета. Пожалуйста, свяжитесь с администратором.")
 
 def create_excel_report(records: List[Tuple]) -> BytesIO:
     wb = Workbook()
@@ -312,9 +308,10 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
     buffer.seek(0)
     return buffer
 
-@dp.message((F.text | F.caption), IsAllowedChatFilter())
-async def handle_scooter_numbers(message: Message):
-    text = message.text or message.caption
+# Изменения для aiogram 2.x: Обработка текстовых сообщений
+@dp.message_handler(content_types=types.ContentTypes.TEXT, check_is_allowed_chat=True)
+async def handle_scooter_numbers(message: types.Message):
+    text = message.text
     if not text:
         return
 
@@ -367,7 +364,7 @@ async def handle_scooter_numbers(message: Message):
     await db_write_batch(records_to_insert)
 
     response_parts = []
-    user_mention = user.mention_html()
+    user_mention = types.User.get_mention(user) # aiogram 2.x
     total_accepted = sum(accepted_summary.values())
     response_parts.append(f"{user_mention}, принято {total_accepted} шт.:")
 
@@ -377,9 +374,11 @@ async def handle_scooter_numbers(message: Message):
 
     await message.reply("\n".join(response_parts))
 
-async def on_startup(bot: Bot):
+async def on_startup(dispatcher: Dispatcher): # Аргумент dispatcher для aiogram 2.x
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(db_executor, init_db)
+    
+    # Установка команд для aiogram 2.x
     admin_commands = [
         types.BotCommand(command="start", description="Начало работы"),
         types.BotCommand(command="today_stats", description="Статистика за сегодня"),
@@ -387,18 +386,20 @@ async def on_startup(bot: Bot):
         types.BotCommand(command="export_all_excel", description="Экспорт Excel за все время"),
         types.BotCommand(command="batch_accept", description="Пакетный прием (сервис кол-во)"),
     ]
-    await bot.set_my_commands(admin_commands)
+    await dispatcher.bot.set_my_commands(admin_commands) # Используем dispatcher.bot для доступа к боту
+    logging.info("Бот запущен и команды установлены.")
 
-async def on_shutdown():
+
+async def on_shutdown(dispatcher: Dispatcher): # Аргумент dispatcher для aiogram 2.x
     if db_executor:
         db_executor.shutdown(wait=True)
     logging.info("Пул потоков БД остановлен.")
+    logging.info("Бот остановлен.")
 
-async def main():
-    dp.startup.register(on_startup)
-    dp.shutdown.register(on_shutdown)
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
-
+# Изменения для aiogram 2.x: Запуск бота
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Регистрация фильтров (это нужно делать после создания dp, но до запуска)
+    dp.filters_factory.bind(is_admin, event_handlers=[dp.message_handler])
+    dp.filters_factory.bind(is_allowed_chat, event_handlers=[dp.message_handler])
+    
+    executor.start_polling(dp, on_startup=on_startup, on_shutdown=on_shutdown, skip_updates=True)
