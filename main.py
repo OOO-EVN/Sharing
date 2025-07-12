@@ -13,11 +13,12 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject, BaseFilter
 from aiogram.types import Message
 from aiogram import F
-from aiogram.enums import ParseMode # Импортируем ParseMode
+from aiogram.enums import ParseMode
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.styles import Font
+from typing import List, Tuple # Добавьте эту строку
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -48,9 +49,8 @@ SERVICE_ALIASES = {
     "whoosh": "Whoosh", "вуш": "Whoosh", "w": "Whoosh",
     "jet": "Jet", "джет": "Jet", "j": "Jet"
 }
-SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"}
+SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"} 
 
-# ИЗМЕНЕНА ЭТА СТРОКА
 bot = Bot(token=BOT_TOKEN, default_parse_mode=ParseMode.HTML)
 dp = Dispatcher()
 db_executor = ThreadPoolExecutor(max_workers=5)
@@ -105,7 +105,8 @@ def init_db():
     run_db_query("CREATE INDEX IF NOT EXISTS idx_user_service ON accepted_scooters (accepted_by_user_id, service);")
     logging.info("База данных успешно инициализирована.")
 
-def insert_batch_records(records_data: list[tuple]):
+# ИЗМЕНЕНА ЭТА СТРОКА
+def insert_batch_records(records_data: List[Tuple]):
     conn = None
     try:
         conn = sqlite3.connect(DB_NAME, timeout=10)
@@ -237,7 +238,7 @@ async def export_excel_handler(message: Message, command: CommandObject):
     filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
     await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
 
-def create_excel_report(records: list[tuple]) -> BytesIO:
+def create_excel_report(records: List[Tuple]) -> BytesIO: # И здесь тоже
     wb = Workbook()
     ws = wb.active
     ws.title = "Данные"
