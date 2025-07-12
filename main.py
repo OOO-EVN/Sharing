@@ -10,46 +10,42 @@ from concurrent.futures import ThreadPoolExecutor
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.dispatcher.filters import BoundFilter
+from aiogram import F
+
 from aiogram.utils import executor
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 
-# --- Инициализация логирования ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 load_dotenv()
 
-# --- КОНСТАНТЫ ---
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 if not BOT_TOKEN:
-    logging.error("BOT_TOKEN не найден в .env файле. Пожалуйста, добавьте его.")
     raise ValueError("BOT_TOKEN не найден в .env файле. Пожалуйста, добавьте его.")
 
 ADMIN_IDS = [int(admin_id) for admin_id in os.getenv('ADMIN_IDS', '').split(',') if admin_id.strip()]
 if not ADMIN_IDS:
-    logging.warning("Внимание: ADMIN_IDS не заданы в .env файле. Функции администратора будут недоступны.")
+    pass
 
 ALLOWED_CHAT_IDS = [int(chat_id) for chat_id in os.getenv('ALLOWED_CHAT_IDS', '').split(',') if chat_id.strip()]
 if not ALLOWED_CHAT_IDS:
-    logging.warning("Внимание: ALLOWED_CHAT_IDS не задан. Бот будет работать только в личных сообщениях с администраторами.")
+    pass
 
 DB_NAME = 'scooters.db'
 TIMEZONE = pytz.timezone('Asia/Almaty') 
 
 YANDEX_SCOOTER_PATTERN = re.compile(r'\b\d{8}\b')
-WOOSH_SCOOTER_PATTERN = re.compile(r'\b[A-Z]{2}\d{4}\b', re.IGNORECASE)
-JET_SCOOTER_PATTERN = re.compile(r'\b\d{6}\b')
+WOOSH_SCOOTER_PATTERN = re.compile(r'\b[A-Z]{2}\d{4}\b', re.IGNORECASE) 
+JET_SCOOTER_PATTERN = re.compile(r'\b\d{3}-?\d{3}\b') 
 
-# --- ИНИЦИАЛИЗАЦИЯ БОТА И ДИСПАТЧЕРА ---
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot) 
 
-# --- Пул потоков для асинхронных операций с БД ---
-db_executor = ThreadPoolExecutor(max_workers=4) # Можно настроить количество потоков
+db_executor = ThreadPoolExecutor(max_workers=4)
 
-# --- КЛАССЫ ФИЛЬТРОВ ---
 class IsAdminFilter(BoundFilter):
     key = 'is_admin'
     def __init__(self, is_admin):
@@ -71,12 +67,10 @@ class IsAllowedChatFilter(BoundFilter):
 dp.filters_factory.bind(IsAdminFilter)
 dp.filters_factory.bind(IsAllowedChatFilter)
 
-# --- ФУНКЦИИ ВЗАИМОДЕЙСТВИЯ С БАЗОЙ ДАННЫХ (СИНХРОННЫЕ) ---
-
 def init_db_sync():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL;") # Включаем WAL режим
+    cursor.execute("PRAGMA journal_mode=WAL;")
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS accepted_scooters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,15 +80,13 @@ def init_db_sync():
             accepted_by_username TEXT,
             accepted_by_fullname TEXT NOT NULL,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            chat_id INTEGER -- Новая колонка
+            chat_id INTEGER
         )
     ''')
-    # Добавляем индексы для ускорения запросов
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON accepted_scooters (timestamp);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_service ON accepted_scooters (accepted_by_user_id, service);")
     conn.commit()
     conn.close()
-    logging.info("База данных инициализирована.")
 
 def insert_scooter_record_sync(scooter_number, service, user_id, username, fullname, chat_id):
     conn = sqlite3.connect(DB_NAME)
@@ -107,9 +99,8 @@ def insert_scooter_record_sync(scooter_number, service, user_id, username, fulln
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (scooter_number, service, user_id, username, fullname, timestamp_str, chat_id))
         conn.commit()
-        logging.info(f"Запись добавлена: {scooter_number} ({service}) от {fullname}")
     except sqlite3.Error as e:
-        logging.error(f"Ошибка при добавлении записи в БД: {e}")
+        pass
     finally:
         conn.close()
 
@@ -122,9 +113,8 @@ def insert_batch_scooter_records_sync(records_data):
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', records_data)
         conn.commit()
-        logging.info(f"Пакетно добавлено {len(records_data)} записей.")
     except sqlite3.Error as e:
-        logging.error(f"Ошибка при пакетном добавлении записей в БД: {e}")
+        pass
     finally:
         conn.close()
 
@@ -140,12 +130,9 @@ def get_scooter_records_sync(date_filter=None):
         records = cursor.fetchall()
         return records
     except sqlite3.Error as e:
-        logging.error(f"Ошибка при получении записей из БД: {e}")
         return []
     finally:
         conn.close()
-
-# --- АСИНХРОННЫЕ ОБЁРТКИ ДЛЯ ФУНКЦИЙ БД ---
 
 async def async_run_db_op(func, *args):
     loop = asyncio.get_running_loop()
@@ -163,8 +150,6 @@ async def async_insert_batch_scooter_records(records_data):
 async def async_get_scooter_records(date_filter=None):
     return await async_run_db_op(get_scooter_records_sync, date_filter)
 
-# --- ОБРАБОТЧИКИ СООБЩЕНИЙ ---
-
 @dp.message_handler(commands=['start'], is_allowed_chat=True)
 async def command_start_handler(message: types.Message) -> None:
     allowed_chats_info = ', '.join(map(str, ALLOWED_CHAT_IDS)) if ALLOWED_CHAT_IDS else "не указаны"
@@ -174,7 +159,7 @@ async def command_start_handler(message: types.Message) -> None:
     await message.answer(response, parse_mode=types.ParseMode.MARKDOWN)
 
 @dp.message_handler(commands=['batch_accept'], is_admin=True)
-@dp.message_handler(commands=['batch_accept'], is_allowed_chat=True) # Доступно и в разрешенных чатах
+@dp.message_handler(commands=['batch_accept'], is_allowed_chat=True)
 async def batch_accept_handler(message: types.Message) -> None:
     args = message.get_args().split()
     if len(args) != 2:
@@ -218,7 +203,7 @@ async def admin_commands_handler(message: types.Message) -> None:
     if command == 'today_stats':
         date_filter = 'today'
     elif command in ['export_today_excel', 'export_all_excel']:
-        date_filter = 'today' if 'today' in command else None # None для 'all'
+        date_filter = 'today' if 'today' in command else None
 
     if command == 'today_stats':
         records = await async_get_scooter_records(date_filter='today')
@@ -228,7 +213,6 @@ async def admin_commands_handler(message: types.Message) -> None:
 
         users_stats = {}
         for record in records:
-            # record: (id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id)
             service = record[2]
             user_id = record[3]
             username = record[4]
@@ -250,7 +234,7 @@ async def admin_commands_handler(message: types.Message) -> None:
         response_parts.append(f"\n<b>Общий итог за сегодня: {total_all_users} шт.</b>")
         await message.answer("\n".join(response_parts), parse_mode=types.ParseMode.HTML)
     
-    else: # export commands
+    else:
         await message.answer(f"Формирую отчет{' за сегодня' if date_filter == 'today' else ' за все время'}...")
         records = await async_get_scooter_records(date_filter=date_filter)
         if not records:
@@ -268,7 +252,6 @@ def create_excel_report(records, sheet_name):
     ws = wb.active
     ws.title = sheet_name
     
-    # Заголовки для основного листа
     headers = ["ID", "Номер Самоката", "Сервис", "ID Пользователя", "Ник", "Полное имя", "Время Принятия", "ID Чата"]
     ws.append(headers)
     header_font = Font(bold=True)
@@ -276,24 +259,21 @@ def create_excel_report(records, sheet_name):
         cell.font = header_font
     
     for row in records:
-        # records: (id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id)
         ws.append(row)
 
-    # Автоматическая ширина колонок для основного листа
     for col in ws.columns:
         max_length = 0
-        column = col[0].column_letter # Получаем букву колонки
+        column = col[0].column_letter
         for cell in col:
             try:
                 if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
-            except TypeError: # Для типов, которые нельзя привести к str (например, None)
+            except TypeError:
                 pass
         adjusted_width = (max_length + 2)
         ws.column_dimensions[column].width = adjusted_width
 
-    # Создание сводного листа
-    ws_summary = wb.create_sheet("Сводка по пользователям и сервисам")
+    ws_summary = wb.create_sheet("Сводка")
     summary_headers = ["Пользователь", "Сервис", "Количество"]
     ws_summary.append(summary_headers)
     for cell in ws_summary[1]:
@@ -301,9 +281,8 @@ def create_excel_report(records, sheet_name):
 
     user_service_counts = {}
     for record in records:
-        # record: (id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id)
         service = record[2]
-        user_fullname = record[5] # Полное имя пользователя
+        user_fullname = record[5]
         if user_fullname not in user_service_counts:
             user_service_counts[user_fullname] = {}
         user_service_counts[user_fullname][service] = user_service_counts[user_fullname].get(service, 0) + 1
@@ -312,7 +291,6 @@ def create_excel_report(records, sheet_name):
         for service, count in services.items():
             ws_summary.append([user, service, count])
     
-    # Автоматическая ширина колонок для сводного листа
     for col in ws_summary.columns:
         max_length = 0
         column = col[0].column_letter
@@ -343,7 +321,7 @@ async def handle_scooter_numbers(message: types.Message) -> None:
     user_id = message.from_user.id
     username = message.from_user.username
     fullname = message.from_user.full_name
-    chat_id = message.chat.id # Получаем ID чата
+    chat_id = message.chat.id
 
     accepted_by_service = {"Яндекс": 0, "Whoosh": 0, "Jet": 0}
     
@@ -363,7 +341,7 @@ async def handle_scooter_numbers(message: types.Message) -> None:
             accepted_by_service[service] += 1
     
     if records_to_insert:
-        await async_insert_batch_scooter_records(records_to_insert) # Используем пакетную вставку
+        await async_insert_batch_scooter_records(records_to_insert)
 
     total_accepted = sum(accepted_by_service.values())
     if total_accepted > 0:
@@ -375,26 +353,18 @@ async def handle_scooter_numbers(message: types.Message) -> None:
                 response_parts.append(f"{service}: {count}")
         await message.reply("\n".join(response_parts), parse_mode=types.ParseMode.HTML)
     else:
-        # Если ничего не найдено, но сообщение в разрешенном чате, можно ничего не отвечать,
-        # чтобы избежать спама, или дать короткое уведомление.
-        # await message.reply("Не найдено номеров самокатов в сообщении.")
-        pass # Просто игнорируем, если нет номеров
+        pass
 
 @dp.message_handler(content_types=types.ContentType.ANY)
 async def handle_unallowed_messages(message: types.Message) -> None:
-    # Игнорируем сообщения, которые не подошли под предыдущие фильтры
     pass
 
-# --- ЗАПУСК БОТА ---
 async def on_startup(dp):
     await async_init_db()
-    logging.info("Бот запущен.")
 
 async def on_shutdown(dp):
-    logging.info("Бот остановлен.")
     if db_executor:
         db_executor.shutdown(wait=True)
-        logging.info("База данных executor остановлен.")
 
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True, on_startup=on_startup, on_shutdown=on_shutdown)
