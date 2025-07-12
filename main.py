@@ -13,6 +13,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject, BaseFilter
 from aiogram.types import Message
 from aiogram import F
+from aiogram.enums import ParseMode # Импортируем ParseMode
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -47,9 +48,10 @@ SERVICE_ALIASES = {
     "whoosh": "Whoosh", "вуш": "Whoosh", "w": "Whoosh",
     "jet": "Jet", "джет": "Jet", "j": "Jet"
 }
-SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"} # Этот словарь пока не используется явно в логике, но может быть полезен для отображения
+SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"}
 
-bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+# ИЗМЕНЕНА ЭТА СТРОКА
+bot = Bot(token=BOT_TOKEN, default_parse_mode=ParseMode.HTML)
 dp = Dispatcher()
 db_executor = ThreadPoolExecutor(max_workers=5)
 
