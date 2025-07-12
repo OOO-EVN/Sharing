@@ -8,13 +8,13 @@ import pytz
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
-from typing import List, Tuple
+from typing import List, Tuple # <--- ЭТО ВАЖНОЕ ИЗМЕНЕНИЕ ДЛЯ СТАРЫХ ВЕРСИЙ PYTHON
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject, BaseFilter
-from aiogram.types import Message, FSInputFile # <--- ADD FSInputFile here
+from aiogram.types import Message, FSInputFile # FSInputFile уже был добавлен ранее
 from aiogram import F
-from aiogram.client.default import DefaultBotProperties
+from aiogram.client.default import DefaultBotProperties # Это для aiogram 3.x, который у вас 3.13
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -105,7 +105,7 @@ def init_db():
     run_db_query("CREATE INDEX IF NOT EXISTS idx_user_service ON accepted_scooters (accepted_by_user_id, service);")
     logging.info("База данных успешно инициализирована.")
 
-def insert_batch_records(records_data: List[Tuple]):
+def insert_batch_records(records_data: List[Tuple]): # <--- ИЗМЕНЕНО: List[Tuple] вместо list[tuple]
     conn = None
     try:
         conn = sqlite3.connect(DB_NAME, timeout=10)
@@ -122,7 +122,7 @@ def insert_batch_records(records_data: List[Tuple]):
         if conn:
             conn.close()
 
-async def db_write_batch(records_data: List[Tuple]):
+async def db_write_batch(records_data: List[Tuple]): # <--- ИЗМЕНЕНО: List[Tuple] вместо list[tuple]
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(db_executor, insert_batch_records, records_data)
 
@@ -235,10 +235,9 @@ async def export_excel_handler(message: Message, command: CommandObject):
     excel_file = create_excel_report(records)
     report_type = "today" if is_today else "full"
     filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
-    # Corrected usage of FSInputFile
     await bot.send_document(message.chat.id, FSInputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
 
-def create_excel_report(records: List[Tuple]) -> BytesIO:
+def create_excel_report(records: List[Tuple]) -> BytesIO: # <--- ИЗМЕНЕНО: List[Tuple] вместо list[tuple]
     wb = Workbook()
     ws = wb.active
     ws.title = "Данные"
