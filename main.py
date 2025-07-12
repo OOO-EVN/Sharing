@@ -55,6 +55,9 @@ bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
+# Объявляем db_executor как None на глобальном уровне
+db_executor = None
+
 class IsAdminFilter(BoundFilter):
     async def check(self, message: types.Message) -> bool:
         return message.from_user.id in ADMIN_IDS
@@ -124,14 +127,17 @@ def insert_batch_records(records_data: List[Tuple]):
 
 async def db_write_batch(records_data: List[Tuple]):
     loop = asyncio.get_running_loop()
+    # Обращаемся к глобальному db_executor
+    global db_executor
     await loop.run_in_executor(db_executor, insert_batch_records, records_data)
 
 async def db_fetch_all(query: str, params: tuple = ()):
     loop = asyncio.get_running_loop()
+    # Обращаемся к глобальному db_executor
+    global db_executor
     return await loop.run_in_executor(db_executor, run_db_query, query, params, 'all')
 
-# **ИСПРАВЛЕННЫЙ ПОРЯДОК АРГУМЕНТОВ В ДЕКОРАТОРАХ**
-@dp.message_handler(IsAllowedChatFilter(), commands="start") # Фильтр сначала, затем именованный аргумент
+@dp.message_handler(IsAllowedChatFilter(), commands="start")
 async def command_start_handler(message: types.Message):
     allowed_chats_info = ', '.join(map(str, ALLOWED_CHAT_IDS)) if ALLOWED_CHAT_IDS else "не указаны"
     response = (
@@ -143,7 +149,7 @@ async def command_start_handler(message: types.Message):
     )
     await message.answer(response, parse_mode="Markdown")
 
-@dp.message_handler(IsAllowedChatFilter(), commands="batch_accept") # Фильтр сначала
+@dp.message_handler(IsAllowedChatFilter(), commands="batch_accept")
 async def batch_accept_handler(message: types.Message):
     args = message.get_args().split()
     if len(args) != 2:
@@ -179,7 +185,7 @@ async def batch_accept_handler(message: types.Message):
     user_mention = types.User.get_mention(user)
     await message.reply(f"{user_mention}, принято {quantity} самокатов сервиса <b>{service}</b>.")
 
-@dp.message_handler(IsAdminFilter(), commands="today_stats") # Фильтр сначала
+@dp.message_handler(IsAdminFilter(), commands="today_stats")
 async def today_stats_handler(message: types.Message):
     today_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
     query = "SELECT service, accepted_by_user_id, accepted_by_username, accepted_by_fullname FROM accepted_scooters WHERE DATE(timestamp) = ?"
@@ -210,7 +216,7 @@ async def today_stats_handler(message: types.Message):
     response_parts.append(f"\n<b>Общий итог за сегодня: {total_all_users} шт.</b>")
     await message.answer("\n".join(response_parts))
 
-@dp.message_handler(IsAdminFilter(), commands=["export_today_excel", "export_all_excel"]) # Фильтр сначала
+@dp.message_handler(IsAdminFilter(), commands=["export_today_excel", "export_all_excel"])
 async def export_excel_handler(message: types.Message):
     is_today = message.get_command() == '/export_today_excel'
     date_filter = ' за сегодня' if is_today else ' за все время'
@@ -301,7 +307,7 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
     buffer.seek(0)
     return buffer
 
-@dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.TEXT) # Фильтр сначала
+@dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.TEXT)
 async def handle_scooter_numbers(message: types.Message):
     text = message.text
     if not text:
@@ -367,6 +373,9 @@ async def handle_scooter_numbers(message: types.Message):
     await message.reply("\n".join(response_parts))
 
 async def on_startup(dispatcher: Dispatcher):
+    global db_executor # Объявляем, что используем глобальную переменную
+    db_executor = ThreadPoolExecutor(max_workers=5) # Инициализируем здесь
+    
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(db_executor, init_db)
     
@@ -382,6 +391,7 @@ async def on_startup(dispatcher: Dispatcher):
 
 
 async def on_shutdown(dispatcher: Dispatcher):
+    global db_executor # Объявляем, что используем глобальную переменную
     if db_executor:
         db_executor.shutdown(wait=True)
     logging.info("Пул потоков БД остановлен.")
