@@ -8,11 +8,11 @@ import pytz
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
-from typing import List, Tuple # <--- ADD THIS LINE
+from typing import List, Tuple
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject, BaseFilter
-from aiogram.types import Message
+from aiogram.types import Message, FSInputFile # <--- ADD FSInputFile here
 from aiogram import F
 from aiogram.client.default import DefaultBotProperties
 
@@ -105,7 +105,7 @@ def init_db():
     run_db_query("CREATE INDEX IF NOT EXISTS idx_user_service ON accepted_scooters (accepted_by_user_id, service);")
     logging.info("База данных успешно инициализирована.")
 
-def insert_batch_records(records_data: List[Tuple]): # <--- MODIFIED LINE
+def insert_batch_records(records_data: List[Tuple]):
     conn = None
     try:
         conn = sqlite3.connect(DB_NAME, timeout=10)
@@ -122,7 +122,7 @@ def insert_batch_records(records_data: List[Tuple]): # <--- MODIFIED LINE
         if conn:
             conn.close()
 
-async def db_write_batch(records_data: List[Tuple]): # <--- MODIFIED LINE
+async def db_write_batch(records_data: List[Tuple]):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(db_executor, insert_batch_records, records_data)
 
@@ -235,9 +235,10 @@ async def export_excel_handler(message: Message, command: CommandObject):
     excel_file = create_excel_report(records)
     report_type = "today" if is_today else "full"
     filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
-    await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
+    # Corrected usage of FSInputFile
+    await bot.send_document(message.chat.id, FSInputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
 
-def create_excel_report(records: List[Tuple]) -> BytesIO: # <--- MODIFIED LINE
+def create_excel_report(records: List[Tuple]) -> BytesIO:
     wb = Workbook()
     ws = wb.active
     ws.title = "Данные"
