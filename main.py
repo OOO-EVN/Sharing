@@ -8,15 +8,18 @@ import pytz
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject, BaseFilter
 from aiogram.types import Message
 from aiogram import F
+
 from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -37,6 +40,7 @@ TIMEZONE = pytz.timezone('Asia/Almaty')
 YANDEX_SCOOTER_PATTERN = re.compile(r'\b(\d{8})\b')
 WOOSH_SCOOTER_PATTERN = re.compile(r'\b([A-ZА-Я]{2}\d{4})\b', re.IGNORECASE)
 JET_SCOOTER_PATTERN = re.compile(r'\b(\d{3}-?\d{3})\b')
+
 BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|yandex|вуш|джет|яндекс)\s+(\d+)\b', re.IGNORECASE)
 SERVICE_ALIASES = {
     "yandex": "Яндекс", "яндекс": "Яндекс",
@@ -141,12 +145,15 @@ async def batch_accept_handler(message: Message, command: CommandObject):
     if command.args is None:
         await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20`", parse_mode="Markdown")
         return
+
     args = command.args.split()
     if len(args) != 2:
         await message.reply("Неверный формат. Используйте: `/batch_accept <сервис> <количество>`", parse_mode="Markdown")
         return
+
     service_raw, quantity_str = args
     service = SERVICE_ALIASES.get(service_raw.lower())
+
     if not service:
         await message.reply("Неизвестный сервис. Доступны: `Yandex`, `Whoosh`, `Jet`.", parse_mode="Markdown")
         return
@@ -157,15 +164,19 @@ async def batch_accept_handler(message: Message, command: CommandObject):
     except ValueError:
         await message.reply("Количество должно быть числом от 1 до 200.")
         return
+
     user = message.from_user
     now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+
     records_to_insert = [
         (
             f"{service.upper()}_BATCH_{i+1}",
             service, user.id, user.username, user.full_name, now_localized_str, message.chat.id
         ) for i in range(quantity)
     ]
+
     await db_write_batch(records_to_insert)
+
     user_mention = user.mention_html()
     await message.reply(f"{user_mention}, принято {quantity} самокатов сервиса <b>{service}</b>.")
 
@@ -174,23 +185,29 @@ async def today_stats_handler(message: Message):
     today_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
     query = "SELECT service, accepted_by_user_id, accepted_by_username, accepted_by_fullname FROM accepted_scooters WHERE DATE(timestamp) = ?"
     records = await db_fetch_all(query, (today_str,))
+
     if not records:
         await message.answer("Сегодня пока ничего не принято.")
         return
+
     user_stats = defaultdict(lambda: defaultdict(int))
     user_info = {}
+
     for service, user_id, username, fullname in records:
         user_stats[user_id][service] += 1
         if user_id not in user_info:
             user_info[user_id] = f"@{username}" if username else fullname
+
     response_parts = ["<b>Статистика за сегодня:</b>"]
     total_all_users = 0
+
     for user_id, services in user_stats.items():
         user_total = sum(services.values())
         total_all_users += user_total
         response_parts.append(f"\n<b>{user_info[user_id]}</b> - всего: {user_total} шт.")
         for service, count in sorted(services.items()):
             response_parts.append(f"  - {service}: {count} шт.")
+
     response_parts.append(f"\n<b>Общий итог за сегодня: {total_all_users} шт.</b>")
     await message.answer("\n".join(response_parts))
 
@@ -199,6 +216,7 @@ async def export_excel_handler(message: Message, command: CommandObject):
     is_today = command.command == 'export_today_excel'
     date_filter = ' за сегодня' if is_today else ' за все время'
     await message.answer(f"Формирую отчет{date_filter}...")
+
     query = "SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters"
     if is_today:
         today_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
@@ -207,9 +225,11 @@ async def export_excel_handler(message: Message, command: CommandObject):
     else:
         query += " ORDER BY timestamp DESC"
         records = await db_fetch_all(query)
+
     if not records:
         await message.answer("Нет данных для экспорта.")
         return
+
     excel_file = create_excel_report(records)
     report_type = "today" if is_today else "full"
     filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
@@ -219,13 +239,16 @@ def create_excel_report(records: list[tuple]) -> BytesIO:
     wb = Workbook()
     ws = wb.active
     ws.title = "Данные"
+
     headers = ["ID", "Номер Самоката", "Сервис", "ID Пользователя", "Ник", "Полное имя", "Время Принятия", "ID Чата"]
     ws.append(headers)
     header_font = Font(bold=True)
     for cell in ws[1]:
         cell.font = header_font
+
     for row in records:
         ws.append(row)
+
     for col in ws.columns:
         max_length = 0
         column_letter = col[0].column_letter
@@ -237,19 +260,23 @@ def create_excel_report(records: list[tuple]) -> BytesIO:
                 pass
         adjusted_width = (max_length + 2) * 1.2
         ws.column_dimensions[column_letter].width = adjusted_width
+
     ws_summary = wb.create_sheet("Сводка")
     summary_headers = ["Пользователь", "Сервис", "Количество"]
     ws_summary.append(summary_headers)
     for cell in ws_summary[1]:
         cell.font = header_font
+
     user_service_counts = defaultdict(lambda: defaultdict(int))
     for record in records:
         service = record[2]
         user_fullname = record[5]
         user_service_counts[user_fullname][service] += 1
+
     for user, services in sorted(user_service_counts.items()):
         for service, count in sorted(services.items()):
             ws_summary.append([user, service, count])
+    
     for col in ws_summary.columns:
         max_length = 0
         column_letter = col[0].column_letter
@@ -261,6 +288,7 @@ def create_excel_report(records: list[tuple]) -> BytesIO:
                 pass
         adjusted_width = (max_length + 2) * 1.2
         ws_summary.column_dimensions[column_letter].width = adjusted_width
+
     buffer = BytesIO()
     wb.save(buffer)
     buffer.seek(0)
@@ -271,11 +299,15 @@ async def handle_scooter_numbers(message: Message):
     text = message.text or message.caption
     if not text:
         return
+
     user = message.from_user
     now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+
     records_to_insert = []
     accepted_summary = defaultdict(int)
+    
     text_for_numbers = text
+
     batch_matches = BATCH_QUANTITY_PATTERN.findall(text)
     if batch_matches:
         for service_raw, quantity_str in batch_matches:
@@ -290,40 +322,41 @@ async def handle_scooter_numbers(message: Message):
             except (ValueError, TypeError):
                 continue
         text_for_numbers = BATCH_QUANTITY_PATTERN.sub('', text)
-    cyrillic_to_latin_map = {
-        ord('а'): 'a', ord('в'): 'b', ord('с'): 'c', ord('е'): 'e', ord('н'): 'h',
-        ord('к'): 'k', ord('м'): 'm', ord('о'): 'o', ord('р'): 'p', ord('т'): 't',
-        ord('х'): 'x', ord('у'): 'y',
-        ord('А'): 'A', ord('В'): 'B', ord('С'): 'C', ord('Е'): 'E', ord('Н'): 'H',
-        ord('К'): 'K', ord('М'): 'M', ord('О'): 'O', ord('Р'): 'P', ord('Т'): 'T',
-        ord('Х'): 'X', ord('У'): 'Y'
-    }
+
     patterns = {
         "Яндекс": YANDEX_SCOOTER_PATTERN,
         "Whoosh": WOOSH_SCOOTER_PATTERN,
         "Jet": JET_SCOOTER_PATTERN
     }
+    
     processed_numbers = set()
+
     for service, pattern in patterns.items():
-        search_text = text_for_numbers if service == "Whoosh" else text_for_numbers.translate(cyrillic_to_latin_map)
-        numbers = pattern.findall(search_text)
+        numbers = pattern.findall(text_for_numbers)
         for num in numbers:
             clean_num = num.replace('-', '') if service == "Jet" else num.upper()
+            
             if clean_num in processed_numbers:
                 continue
+            
             records_to_insert.append((clean_num, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
             accepted_summary[service] += 1
             processed_numbers.add(clean_num)
+
     if not records_to_insert:
         return
+
     await db_write_batch(records_to_insert)
+
     response_parts = []
     user_mention = user.mention_html()
     total_accepted = sum(accepted_summary.values())
     response_parts.append(f"{user_mention}, принято {total_accepted} шт.:")
+
     for service, count in sorted(accepted_summary.items()):
         if count > 0:
             response_parts.append(f"  - <b>{service}</b>: {count} шт.")
+
     await message.reply("\n".join(response_parts))
 
 async def on_startup(bot: Bot):
