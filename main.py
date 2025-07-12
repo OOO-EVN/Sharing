@@ -336,43 +336,76 @@ def create_excel_report(records: list[tuple]) -> BytesIO:
 
 
 # --- Обработчик текстовых сообщений (основная логика) ---
-@dp.message(F.text, IsAllowedChatFilter())
+# ИЗМЕНЕНИЕ: Добавлен F.caption, чтобы бот реагировал на подписи к фото/видео
+@dp.message((F.text | F.caption), IsAllowedChatFilter())
 async def handle_scooter_numbers(message: Message):
     """Главный обработчик для распознавания номеров и пакетного приема."""
-    text = message.text
+    # ИЗМЕНЕНИЕ: Получаем текст из сообщения или из подписи
+    text = message.text or message.caption
+    if not text:
+        return
+
     user = message.from_user
     now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
 
     records_to_insert = []
     accepted_summary = defaultdict(int)
+    
+    text_for_numbers = text # Начинаем с полного текста
 
     # 1. Проверка на пакетный прием (например, "Яндекс 10")
+    # Используем оригинальный текст, так как паттерн уже содержит кириллицу
     batch_matches = BATCH_QUANTITY_PATTERN.findall(text)
     if batch_matches:
         for service_raw, quantity_str in batch_matches:
             service = SERVICE_ALIASES.get(service_raw.lower())
-            quantity = int(quantity_str)
-            if service and 0 < quantity <= 200:
-                for i in range(quantity):
-                    placeholder_number = f"{service.upper()}_BATCH_{i+1}"
-                    records_to_insert.append((placeholder_number, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
-                accepted_summary[service] += quantity
+            try:
+                quantity = int(quantity_str)
+                if service and 0 < quantity <= 200:
+                    for i in range(quantity):
+                        placeholder_number = f"{service.upper()}_BATCH_{i+1}"
+                        records_to_insert.append((placeholder_number, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
+                    accepted_summary[service] += quantity
+            except (ValueError, TypeError):
+                continue # Игнорируем, если количество - невалидное число
         # Удаляем обработанные части из текста, чтобы не искать в них номера
-        text = BATCH_QUANTITY_PATTERN.sub('', text)
+        text_for_numbers = BATCH_QUANTITY_PATTERN.sub('', text)
 
     # 2. Поиск отдельных номеров в оставшемся тексте
+    # Создаем таблицу для транслитерации похожих кириллических символов в латиницу
+    cyrillic_to_latin_map = {
+        ord('а'): 'a', ord('в'): 'b', ord('с'): 'c', ord('е'): 'e', ord('н'): 'h',
+        ord('к'): 'k', ord('м'): 'm', ord('о'): 'o', ord('р'): 'p', ord('т'): 't',
+        ord('х'): 'x', ord('у'): 'y',
+        # Заглавные
+        ord('А'): 'A', ord('В'): 'B', ord('С'): 'C', ord('Е'): 'E', ord('Н'): 'H',
+        ord('К'): 'K', ord('М'): 'M', ord('О'): 'O', ord('Р'): 'P', ord('Т'): 'T',
+        ord('Х'): 'X', ord('У'): 'Y'
+    }
+    translated_text = text_for_numbers.translate(cyrillic_to_latin_map)
+
     patterns = {
         "Яндекс": YANDEX_SCOOTER_PATTERN,
         "Whoosh": WOOSH_SCOOTER_PATTERN,
         "Jet": JET_SCOOTER_PATTERN
     }
+    
+    processed_numbers = set()
+
     for service, pattern in patterns.items():
-        numbers = pattern.findall(text)
+        # Ищем в транслитерированном тексте
+        numbers = pattern.findall(translated_text)
         for num in numbers:
             # Нормализация номера Jet (удаление дефиса)
             clean_num = num.replace('-', '') if service == "Jet" else num.upper()
+            
+            # Проверяем, не обработали ли мы уже этот номер
+            if clean_num in processed_numbers:
+                continue
+            
             records_to_insert.append((clean_num, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
             accepted_summary[service] += 1
+            processed_numbers.add(clean_num)
 
     # 3. Сохранение в БД и ответ пользователю
     if not records_to_insert:
