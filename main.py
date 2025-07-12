@@ -10,72 +10,106 @@ from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
 
 from aiogram import Bot, Dispatcher, types
-from aiogram.dispatcher.filters import BoundFilter
+from aiogram.filters import Command, CommandObject, BaseFilter
+from aiogram.types import Message
 from aiogram import F
-
-from aiogram.utils import executor
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment
+from openpyxl.styles import Font
 
+# --- Настройка логирования ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# --- Загрузка переменных окружения ---
 load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден в .env файле. Пожалуйста, добавьте его.")
 
-ADMIN_IDS = [int(admin_id) for admin_id in os.getenv('ADMIN_IDS', '').split(',') if admin_id.strip()]
-if not ADMIN_IDS:
-    pass
-
-ALLOWED_CHAT_IDS = [int(chat_id) for chat_id in os.getenv('ALLOWED_CHAT_IDS', '').split(',') if chat_id.strip()]
-if not ALLOWED_CHAT_IDS:
-    pass
+# --- Конфигурация ---
+# Преобразуем строки с ID в списки целых чисел, обрабатывая возможные пробелы
+try:
+    ADMIN_IDS = {int(admin_id) for admin_id in os.getenv('ADMIN_IDS', '').split(',') if admin_id.strip()}
+    ALLOWED_CHAT_IDS = {int(chat_id) for chat_id in os.getenv('ALLOWED_CHAT_IDS', '').split(',') if chat_id.strip()}
+except ValueError:
+    logging.error("Не удалось прочитать ADMIN_IDS или ALLOWED_CHAT_IDS. Убедитесь, что они являются числами, разделенными запятыми.")
+    ADMIN_IDS = set()
+    ALLOWED_CHAT_IDS = set()
 
 DB_NAME = 'scooters.db'
-TIMEZONE = pytz.timezone('Asia/Almaty') 
+TIMEZONE = pytz.timezone('Asia/Almaty')
 
-YANDEX_SCOOTER_PATTERN = re.compile(r'\b\d{8}\b')
-WOOSH_SCOOTER_PATTERN = re.compile(r'\b[A-Z]{2}\d{4}\b', re.IGNORECASE) 
-JET_SCOOTER_PATTERN = re.compile(r'\b\d{3}-?\d{3}\b') 
+# --- Регулярные выражения и константы ---
+# Улучшенные и более строгие регулярные выражения
+YANDEX_SCOOTER_PATTERN = re.compile(r'\b(\d{8})\b')
+WOOSH_SCOOTER_PATTERN = re.compile(r'\b([A-Z]{2}\d{4})\b', re.IGNORECASE)
+JET_SCOOTER_PATTERN = re.compile(r'\b(\d{3}-?\d{3})\b')
 
-BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|yandex)\s+(\d+)\b', re.IGNORECASE)
+# Паттерн для пакетного приема (например, "Яндекс 10")
+BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|yandex|вуш|джет|яндекс)\s+(\d+)\b', re.IGNORECASE)
+SERVICE_ALIASES = {
+    "yandex": "Яндекс", "яндекс": "Яндекс",
+    "whoosh": "Whoosh", "вуш": "Whoosh",
+    "jet": "Jet", "джет": "Jet"
+}
 SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"}
 
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(bot) 
 
-db_executor = ThreadPoolExecutor(max_workers=4)
+# --- Инициализация Aiogram ---
+bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+dp = Dispatcher()
 
-class IsAdminFilter(BoundFilter):
-    key = 'is_admin'
-    def __init__(self, is_admin):
-        self.is_admin = is_admin
-    async def check(self, message: types.Message):
+# --- Пул потоков для работы с БД ---
+# Использование ThreadPoolExecutor для асинхронной работы с синхронной библиотекой sqlite3
+db_executor = ThreadPoolExecutor(max_workers=5)
+
+
+# --- Фильтры ---
+class IsAdminFilter(BaseFilter):
+    async def __call__(self, message: Message) -> bool:
         return message.from_user.id in ADMIN_IDS
 
-class IsAllowedChatFilter(BoundFilter):
-    key = 'is_allowed_chat'
-    def __init__(self, is_allowed_chat):
-        self.is_allowed_chat = is_allowed_chat
-    async def check(self, message: types.Message):
-        if message.chat.type == types.ChatType.PRIVATE and message.from_user.id in ADMIN_IDS:
+class IsAllowedChatFilter(BaseFilter):
+    async def __call__(self, message: Message) -> bool:
+        # Разрешить в личных чатах для админов
+        if message.chat.type == 'private' and message.from_user.id in ADMIN_IDS:
             return True
-        if message.chat.type in [types.ChatType.GROUP, types.ChatType.SUPERGROUP] and message.chat.id in ALLOWED_CHAT_IDS:
+        # Разрешить в указанных групповых чатах
+        if message.chat.type in ['group', 'supergroup'] and message.chat.id in ALLOWED_CHAT_IDS:
             return True
+        # В остальных случаях запретить
+        logging.warning(f"Сообщение от {message.from_user.id} в чате {message.chat.id} было заблокировано фильтром.")
         return False
 
-dp.filters_factory.bind(IsAdminFilter)
-dp.filters_factory.bind(IsAllowedChatFilter)
 
-def init_db_sync():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL;")
-    cursor.execute('''
+# --- Функции для работы с базой данных (синхронные) ---
+def run_db_query(query: str, params: tuple = (), fetch: str = None):
+    """Универсальная функция для выполнения запросов к БД."""
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_NAME, timeout=10)
+        # WAL-режим для лучшей производительности при одновременных операциях чтения и записи
+        conn.execute("PRAGMA journal_mode=WAL;")
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        conn.commit()
+        if fetch == 'one':
+            return cursor.fetchone()
+        if fetch == 'all':
+            return cursor.fetchall()
+        return cursor.lastrowid
+    except sqlite3.Error as e:
+        logging.error(f"Ошибка базы данных: {e}\nЗапрос: {query}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def init_db():
+    """Инициализация структуры базы данных."""
+    run_db_query('''
         CREATE TABLE IF NOT EXISTS accepted_scooters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             scooter_number TEXT NOT NULL,
@@ -83,322 +117,315 @@ def init_db_sync():
             accepted_by_user_id INTEGER NOT NULL,
             accepted_by_username TEXT,
             accepted_by_fullname TEXT NOT NULL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            chat_id INTEGER
+            timestamp DATETIME NOT NULL,
+            chat_id INTEGER NOT NULL
         )
     ''')
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON accepted_scooters (timestamp);")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_service ON accepted_scooters (accepted_by_user_id, service);")
-    conn.commit()
-    conn.close()
+    run_db_query("CREATE INDEX IF NOT EXISTS idx_timestamp ON accepted_scooters (timestamp);")
+    run_db_query("CREATE INDEX IF NOT EXISTS idx_user_service ON accepted_scooters (accepted_by_user_id, service);")
+    logging.info("База данных успешно инициализирована.")
 
-def insert_scooter_record_sync(scooter_number, service, user_id, username, fullname, chat_id):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    now_localized = datetime.datetime.now(TIMEZONE)
-    timestamp_str = now_localized.strftime("%Y-%m-%d %H:%M:%S")
+def insert_batch_records(records_data: list[tuple]):
+    """Пакетная вставка записей о самокатах."""
+    conn = None
     try:
-        cursor.execute('''
-            INSERT INTO accepted_scooters (scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (scooter_number, service, user_id, username, fullname, timestamp_str, chat_id))
-        conn.commit()
-    except sqlite3.Error as e:
-        pass
-    finally:
-        conn.close()
-
-def insert_batch_scooter_records_sync(records_data):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
+        conn = sqlite3.connect(DB_NAME, timeout=10)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        cursor = conn.cursor()
         cursor.executemany('''
             INSERT INTO accepted_scooters (scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', records_data)
         conn.commit()
     except sqlite3.Error as e:
-        pass
+        logging.error(f"Ошибка пакетной вставки в БД: {e}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
-def get_scooter_records_sync(date_filter=None):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
-        if date_filter == 'today':
-            today_localized = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
-            cursor.execute("SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters WHERE DATE(timestamp) = ?", (today_localized,))
-        else:
-            cursor.execute("SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters")
-        records = cursor.fetchall()
-        return records
-    except sqlite3.Error as e:
-        return []
-    finally:
-        conn.close()
 
-async def async_run_db_op(func, *args):
+# --- Асинхронные обертки для функций БД ---
+async def db_write_batch(records_data: list[tuple]):
+    """Асинхронная пакетная запись в БД."""
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(db_executor, func, *args)
+    await loop.run_in_executor(db_executor, insert_batch_records, records_data)
 
-async def async_init_db():
-    await async_run_db_op(init_db_sync)
+async def db_fetch_all(query: str, params: tuple = ()):
+    """Асинхронное получение всех записей из БД."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(db_executor, run_db_query, query, params, 'all')
 
-async def async_insert_scooter_record(scooter_number, service, user_id, username, fullname, chat_id):
-    await async_run_db_op(insert_scooter_record_sync, scooter_number, service, user_id, username, fullname, chat_id)
 
-async def async_insert_batch_scooter_records(records_data):
-    await async_run_db_op(insert_batch_scooter_records_sync, records_data)
-
-async def async_get_scooter_records(date_filter=None):
-    return await async_run_db_op(get_scooter_records_sync, date_filter)
-
-@dp.message_handler(commands=['start'], is_allowed_chat=True)
-async def command_start_handler(message: types.Message) -> None:
+# --- Обработчики команд ---
+@dp.message(Command("start"), IsAllowedChatFilter())
+async def command_start_handler(message: Message):
+    """Обработчик команды /start."""
     allowed_chats_info = ', '.join(map(str, ALLOWED_CHAT_IDS)) if ALLOWED_CHAT_IDS else "не указаны"
-    response = (f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
-                f"Я работаю в группе с ID: `{allowed_chats_info}` и в личных сообщениях с администраторами.\n"
-                f"Твой ID чата: `{message.chat.id}`")
-    await message.answer(response, parse_mode=types.ParseMode.MARKDOWN)
+    response = (
+        f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
+        f"Просто отправь мне номер самоката, и я его учту.\n"
+        f"Для пакетного приёма используй формат: `сервис количество` (например, `Яндекс 10`).\n\n"
+        f"Я работаю в группах с ID: `{allowed_chats_info}` и в личных сообщениях с администраторами.\n"
+        f"Твой ID чата: `{message.chat.id}`"
+    )
+    await message.answer(response, parse_mode="Markdown")
 
-@dp.message_handler(commands=['batch_accept'], is_admin=True)
-@dp.message_handler(commands=['batch_accept'], is_allowed_chat=True)
-async def batch_accept_handler(message: types.Message) -> None:
-    args = message.get_args().split()
+@dp.message(Command("batch_accept"), IsAllowedChatFilter())
+async def batch_accept_handler(message: Message, command: CommandObject):
+    """Обработчик команды для пакетного приема. Пример: /batch_accept Yandex 20"""
+    if command.args is None:
+        await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20`", parse_mode="Markdown")
+        return
+
+    args = command.args.split()
     if len(args) != 2:
-        await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20`", parse_mode=types.ParseMode.MARKDOWN)
+        await message.reply("Неверный формат. Используйте: `/batch_accept <сервис> <количество>`", parse_mode="Markdown")
         return
 
     service_raw, quantity_str = args
-    service = SERVICE_MAP.get(service_raw.lower())
+    service = SERVICE_ALIASES.get(service_raw.lower())
 
     if not service:
-        await message.reply("Неизвестный сервис. Доступны: `Yandex`, `Whoosh`, `Jet`.", parse_mode=types.ParseMode.MARKDOWN)
+        await message.reply("Неизвестный сервис. Доступны: `Yandex`, `Whoosh`, `Jet`.", parse_mode="Markdown")
         return
     try:
         quantity = int(quantity_str)
-        if quantity <= 0: raise ValueError
+        if not (0 < quantity <= 200):  # Ограничение на количество для безопасности
+            raise ValueError
     except ValueError:
-        await message.reply("Количество должно быть положительным числом.")
+        await message.reply("Количество должно быть числом от 1 до 200.")
         return
 
-    user_id = message.from_user.id
-    username = message.from_user.username
-    fullname = message.from_user.full_name
-    chat_id = message.chat.id
-    timestamp_now_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+    user = message.from_user
+    now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
 
-    records_to_insert = []
-    for i in range(quantity):
-        placeholder_number = f"{service.upper()}_BATCH_{timestamp_now_str.replace(' ', '_').replace(':', '')}_{i+1}"
-        records_to_insert.append((placeholder_number, service, user_id, username, fullname, timestamp_now_str, chat_id))
-    
-    await async_insert_batch_scooter_records(records_to_insert)
-    
-    user_mention = f"@{username}" if username else f"<a href='tg://user?id={user_id}'>{fullname}</a>"
-    await message.reply(f"{user_mention}, принято {quantity} самокатов сервиса {service}.", parse_mode=types.ParseMode.HTML)
+    records_to_insert = [
+        (
+            f"{service.upper()}_BATCH_{i+1}",
+            service, user.id, user.username, user.full_name, now_localized_str, message.chat.id
+        ) for i in range(quantity)
+    ]
 
-@dp.message_handler(commands=['today_stats', 'export_today_excel', 'export_all_excel'], is_admin=True)
-async def admin_commands_handler(message: types.Message) -> None:
-    command = message.get_command(pure=True)
-    date_filter = None
-    if command == 'today_stats':
-        date_filter = 'today'
-    elif command in ['export_today_excel', 'export_all_excel']:
-        date_filter = 'today' if 'today' in command else None
+    await db_write_batch(records_to_insert)
 
-    if command == 'today_stats':
-        records = await async_get_scooter_records(date_filter='today')
-        if not records:
-            await message.answer("Сегодня пока ничего не принято.")
-            return
+    user_mention = user.mention_html()
+    await message.reply(f"{user_mention}, принято {quantity} самокатов сервиса <b>{service}</b>.")
 
-        users_stats = {}
-        for record in records:
-            service = record[2]
-            user_id = record[3]
-            username = record[4]
-            fullname = record[5]
 
-            if user_id not in users_stats:
-                users_stats[user_id] = {'display_name': f"@{username}" if username else fullname, 'services': {}}
-            users_stats[user_id]['services'][service] = users_stats[user_id]['services'].get(service, 0) + 1
-        
-        response_parts = ["Статистика за сегодня:"]
-        total_all_users = 0
-        for user_id, user_data in users_stats.items():
-            user_total = sum(user_data['services'].values())
-            total_all_users += user_total
-            response_parts.append(f"\n<b>{user_data['display_name']}</b> - всего: {user_total} шт.")
-            for service, count in user_data['services'].items():
-                response_parts.append(f"  - {service}: {count} шт.")
-        
-        response_parts.append(f"\n<b>Общий итог за сегодня: {total_all_users} шт.</b>")
-        await message.answer("\n".join(response_parts), parse_mode=types.ParseMode.HTML)
-    
+# --- Админские команды ---
+@dp.message(Command("today_stats"), IsAdminFilter())
+async def today_stats_handler(message: Message):
+    """Формирование статистики за сегодня."""
+    today_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
+    query = "SELECT service, accepted_by_user_id, accepted_by_username, accepted_by_fullname FROM accepted_scooters WHERE DATE(timestamp) = ?"
+    records = await db_fetch_all(query, (today_str,))
+
+    if not records:
+        await message.answer("Сегодня пока ничего не принято.")
+        return
+
+    user_stats = defaultdict(lambda: defaultdict(int))
+    user_info = {}
+
+    for service, user_id, username, fullname in records:
+        user_stats[user_id][service] += 1
+        if user_id not in user_info:
+            user_info[user_id] = f"@{username}" if username else fullname
+
+    response_parts = ["<b>Статистика за сегодня:</b>"]
+    total_all_users = 0
+
+    for user_id, services in user_stats.items():
+        user_total = sum(services.values())
+        total_all_users += user_total
+        response_parts.append(f"\n<b>{user_info[user_id]}</b> - всего: {user_total} шт.")
+        for service, count in sorted(services.items()):
+            response_parts.append(f"  - {service}: {count} шт.")
+
+    response_parts.append(f"\n<b>Общий итог за сегодня: {total_all_users} шт.</b>")
+    await message.answer("\n".join(response_parts))
+
+@dp.message(Command("export_today_excel", "export_all_excel"), IsAdminFilter())
+async def export_excel_handler(message: Message, command: CommandObject):
+    """Экспорт данных в Excel."""
+    is_today = command.command == 'export_today_excel'
+    date_filter = ' за сегодня' if is_today else ' за все время'
+    await message.answer(f"Формирую отчет{date_filter}...")
+
+    query = "SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters"
+    if is_today:
+        today_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
+        query += " WHERE DATE(timestamp) = ?"
+        records = await db_fetch_all(query, (today_str,))
     else:
-        await message.answer(f"Формирую отчет{' за сегодня' if date_filter == 'today' else ' за все время'}...")
-        records = await async_get_scooter_records(date_filter=date_filter)
-        if not records:
-            await message.answer("Нет данных для экспорта.")
-            return
-        
-        report_type = "today" if date_filter == "today" else "full"
-        excel_file = create_excel_report(records, f"Отчет {report_type}")
-        filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
-        await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
+        query += " ORDER BY timestamp DESC"
+        records = await db_fetch_all(query)
+
+    if not records:
+        await message.answer("Нет данных для экспорта.")
+        return
+
+    excel_file = create_excel_report(records)
+    report_type = "today" if is_today else "full"
+    filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
+    await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
 
 
-def create_excel_report(records, sheet_name):
+def create_excel_report(records: list[tuple]) -> BytesIO:
+    """Создает Excel отчет в памяти."""
     wb = Workbook()
     ws = wb.active
-    ws.title = sheet_name
-    
+    ws.title = "Данные"
+
     headers = ["ID", "Номер Самоката", "Сервис", "ID Пользователя", "Ник", "Полное имя", "Время Принятия", "ID Чата"]
     ws.append(headers)
     header_font = Font(bold=True)
     for cell in ws[1]:
         cell.font = header_font
-    
+
     for row in records:
         ws.append(row)
 
+    # Автоподбор ширины колонок
     for col in ws.columns:
         max_length = 0
-        column = col[0].column_letter
+        column_letter = col[0].column_letter
         for cell in col:
             try:
                 if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
-            except TypeError:
+            except:
                 pass
-        adjusted_width = (max_length + 2)
-        ws.column_dimensions[column].width = adjusted_width
+        adjusted_width = (max_length + 2) * 1.2
+        ws.column_dimensions[column_letter].width = adjusted_width
 
+    # Создание сводной таблицы
     ws_summary = wb.create_sheet("Сводка")
     summary_headers = ["Пользователь", "Сервис", "Количество"]
     ws_summary.append(summary_headers)
     for cell in ws_summary[1]:
         cell.font = header_font
 
-    user_service_counts = {}
+    user_service_counts = defaultdict(lambda: defaultdict(int))
     for record in records:
         service = record[2]
         user_fullname = record[5]
-        if user_fullname not in user_service_counts:
-            user_service_counts[user_fullname] = {}
-        user_service_counts[user_fullname][service] = user_service_counts[user_fullname].get(service, 0) + 1
+        user_service_counts[user_fullname][service] += 1
 
-    for user, services in user_service_counts.items():
-        for service, count in services.items():
+    for user, services in sorted(user_service_counts.items()):
+        for service, count in sorted(services.items()):
             ws_summary.append([user, service, count])
     
     for col in ws_summary.columns:
         max_length = 0
-        column = col[0].column_letter
+        column_letter = col[0].column_letter
         for cell in col:
             try:
                 if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
-            except TypeError:
+            except:
                 pass
-        adjusted_width = (max_length + 2)
-        ws_summary.column_dimensions[column].width = adjusted_width
+        adjusted_width = (max_length + 2) * 1.2
+        ws_summary.column_dimensions[column_letter].width = adjusted_width
+
 
     buffer = BytesIO()
     wb.save(buffer)
     buffer.seek(0)
     return buffer
 
-@dp.message_handler(
-    lambda message: not message.is_command(),
-    content_types=types.ContentType.ANY, 
-    is_allowed_chat=True
-)
-async def handle_scooter_numbers(message: types.Message) -> None:
-    text_to_check = message.text or message.caption
-    if not text_to_check:
-        return
 
-    user_id = message.from_user.id
-    username = message.from_user.username
-    fullname = message.from_user.full_name
-    chat_id = message.chat.id
-    timestamp_now_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+# --- Обработчик текстовых сообщений (основная логика) ---
+@dp.message(F.text, IsAllowedChatFilter())
+async def handle_scooter_numbers(message: Message):
+    """Главный обработчик для распознавания номеров и пакетного приема."""
+    text = message.text
+    user = message.from_user
+    now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
 
-    batch_matches = BATCH_QUANTITY_PATTERN.findall(text_to_check)
-    
+    records_to_insert = []
+    accepted_summary = defaultdict(int)
+
+    # 1. Проверка на пакетный прием (например, "Яндекс 10")
+    batch_matches = BATCH_QUANTITY_PATTERN.findall(text)
     if batch_matches:
-        records_to_insert = []
-        accepted_by_service = defaultdict(int)
-
         for service_raw, quantity_str in batch_matches:
-            service = SERVICE_MAP.get(service_raw.lower())
-            try:
-                quantity = int(quantity_str)
-                if quantity > 0:
-                    for i in range(quantity):
-                        placeholder_number = f"{service.upper()}_BATCH_{timestamp_now_str.replace(' ', '_').replace(':', '')}_{i+1}"
-                        records_to_insert.append((placeholder_number, service, user_id, username, fullname, timestamp_now_str, chat_id))
-                    accepted_by_service[service] += quantity
-            except ValueError:
-                continue
+            service = SERVICE_ALIASES.get(service_raw.lower())
+            quantity = int(quantity_str)
+            if service and 0 < quantity <= 200:
+                for i in range(quantity):
+                    placeholder_number = f"{service.upper()}_BATCH_{i+1}"
+                    records_to_insert.append((placeholder_number, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
+                accepted_summary[service] += quantity
+        # Удаляем обработанные части из текста, чтобы не искать в них номера
+        text = BATCH_QUANTITY_PATTERN.sub('', text)
 
-        if records_to_insert:
-            await async_insert_batch_scooter_records(records_to_insert)
-            
-            response_parts = []
-            user_mention = f"@{username}" if username else f"<a href='tg://user?id={user_id}'>{fullname}</a>"
-            total_accepted = sum(accepted_by_service.values())
-            response_parts.append(f"{user_mention}, принято от тебя {total_accepted} шт.:")
-            for service, count in accepted_by_service.items():
-                if count > 0:
-                    response_parts.append(f"{service}: {count}")
-            await message.reply("\n".join(response_parts), parse_mode=types.ParseMode.HTML)
-            return
-    
-    accepted_by_service = {"Яндекс": 0, "Whoosh": 0, "Jet": 0}
-    
+    # 2. Поиск отдельных номеров в оставшемся тексте
     patterns = {
         "Яндекс": YANDEX_SCOOTER_PATTERN,
         "Whoosh": WOOSH_SCOOTER_PATTERN,
         "Jet": JET_SCOOTER_PATTERN
     }
-
-    records_to_insert = []
-
     for service, pattern in patterns.items():
-        numbers = pattern.findall(text_to_check)
+        numbers = pattern.findall(text)
         for num in numbers:
-            records_to_insert.append((num, service, user_id, username, fullname, timestamp_now_str, chat_id))
-            accepted_by_service[service] += 1
-    
-    if records_to_insert:
-        await async_insert_batch_scooter_records(records_to_insert)
+            # Нормализация номера Jet (удаление дефиса)
+            clean_num = num.replace('-', '') if service == "Jet" else num.upper()
+            records_to_insert.append((clean_num, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
+            accepted_summary[service] += 1
 
-    total_accepted = sum(accepted_by_service.values())
-    if total_accepted > 0:
-        response_parts = []
-        user_mention = f"@{username}" if username else f"<a href='tg://user?id={user_id}'>{fullname}</a>"
-        response_parts.append(f"{user_mention}, принято от тебя {total_accepted} шт.:")
-        for service, count in accepted_by_service.items():
-            if count > 0:
-                response_parts.append(f"{service}: {count}")
-        await message.reply("\n".join(response_parts), parse_mode=types.ParseMode.HTML)
-    else:
-        pass
+    # 3. Сохранение в БД и ответ пользователю
+    if not records_to_insert:
+        # Если ничего не найдено, можно либо ничего не делать, либо ответить
+        # logging.info(f"В сообщении от {user.id} не найдено номеров или команд.")
+        return
 
-@dp.message_handler(content_types=types.ContentType.ANY)
-async def handle_unallowed_messages(message: types.Message) -> None:
-    pass
+    await db_write_batch(records_to_insert)
 
-async def on_startup(dp):
-    await async_init_db()
+    response_parts = []
+    user_mention = user.mention_html()
+    total_accepted = sum(accepted_summary.values())
+    response_parts.append(f"{user_mention}, принято {total_accepted} шт.:")
 
-async def on_shutdown(dp):
+    for service, count in sorted(accepted_summary.items()):
+        if count > 0:
+            response_parts.append(f"  - <b>{service}</b>: {count} шт.")
+
+    await message.reply("\n".join(response_parts))
+
+
+# --- Жизненный цикл бота ---
+async def on_startup(bot: Bot):
+    """Выполняется при запуске бота."""
+    # Асинхронно запускаем инициализацию БД в пуле потоков
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(db_executor, init_db)
+    # Установка команд меню для удобства
+    admin_commands = [
+        types.BotCommand(command="start", description="Начало работы"),
+        types.BotCommand(command="today_stats", description="Статистика за сегодня"),
+        types.BotCommand(command="export_today_excel", description="Экспорт Excel за сегодня"),
+        types.BotCommand(command="export_all_excel", description="Экспорт Excel за все время"),
+        types.BotCommand(command="batch_accept", description="Пакетный прием (сервис кол-во)"),
+    ]
+    await bot.set_my_commands(admin_commands)
+
+
+async def on_shutdown():
+    """Выполняется при остановке бота."""
     if db_executor:
         db_executor.shutdown(wait=True)
+    logging.info("Пул потоков БД остановлен.")
+
+
+async def main():
+    """Основная функция для запуска бота."""
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
+    # Удаляем вебхук, если он был установлен ранее
+    await bot.delete_webhook(drop_pending_updates=True)
+    await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=True, on_startup=on_startup, on_shutdown=on_shutdown)
+    asyncio.run(main())
