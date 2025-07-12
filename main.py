@@ -8,12 +8,13 @@ import pytz
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
+from typing import List, Tuple # <--- ADD THIS LINE
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject, BaseFilter
 from aiogram.types import Message
 from aiogram import F
-from aiogram.client.default import DefaultBotProperties # Added for aiogram 3.x parse_mode handling
+from aiogram.client.default import DefaultBotProperties
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -42,16 +43,14 @@ YANDEX_SCOOTER_PATTERN = re.compile(r'\b(\d{8})\b')
 WOOSH_SCOOTER_PATTERN = re.compile(r'\b([A-ZА-Я]{2}\d{4})\b', re.IGNORECASE)
 JET_SCOOTER_PATTERN = re.compile(r'\b(\d{3}-?\d{3})\b')
 
-# Updated BATCH_QUANTITY_PATTERN to include single-letter aliases (w, j, y)
 BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|yandex|вуш|джет|яндекс|w|j|y)\s+(\d+)\b', re.IGNORECASE)
 SERVICE_ALIASES = {
-    "yandex": "Яндекс", "яндекс": "Яндекс", "y": "Яндекс", # Added "y"
-    "whoosh": "Whoosh", "вуш": "Whoosh", "w": "Whoosh",   # Added "w"
-    "jet": "Jet", "джет": "Jet", "j": "Jet"               # Added "j"
+    "yandex": "Яндекс", "яндекс": "Яндекс", "y": "Яндекс",
+    "whoosh": "Whoosh", "вуш": "Whoosh", "w": "Whoosh",
+    "jet": "Jet", "джет": "Jet", "j": "Jet"
 }
-SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"} # This map is not used in the provided code, but kept for consistency.
+SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"}
 
-# Corrected Bot initialization for aiogram 3.x
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 db_executor = ThreadPoolExecutor(max_workers=5)
@@ -106,7 +105,7 @@ def init_db():
     run_db_query("CREATE INDEX IF NOT EXISTS idx_user_service ON accepted_scooters (accepted_by_user_id, service);")
     logging.info("База данных успешно инициализирована.")
 
-def insert_batch_records(records_data: list[tuple]):
+def insert_batch_records(records_data: List[Tuple]): # <--- MODIFIED LINE
     conn = None
     try:
         conn = sqlite3.connect(DB_NAME, timeout=10)
@@ -123,7 +122,7 @@ def insert_batch_records(records_data: list[tuple]):
         if conn:
             conn.close()
 
-async def db_write_batch(records_data: list[tuple]):
+async def db_write_batch(records_data: List[Tuple]): # <--- MODIFIED LINE
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(db_executor, insert_batch_records, records_data)
 
@@ -238,7 +237,7 @@ async def export_excel_handler(message: Message, command: CommandObject):
     filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
     await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
 
-def create_excel_report(records: list[tuple]) -> BytesIO:
+def create_excel_report(records: List[Tuple]) -> BytesIO: # <--- MODIFIED LINE
     wb = Workbook()
     ws = wb.active
     ws.title = "Данные"
