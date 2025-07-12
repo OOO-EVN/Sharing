@@ -13,6 +13,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject, BaseFilter
 from aiogram.types import Message
 from aiogram import F
+from aiogram.client.default import DefaultBotProperties # Added for aiogram 3.x parse_mode handling
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -41,15 +42,17 @@ YANDEX_SCOOTER_PATTERN = re.compile(r'\b(\d{8})\b')
 WOOSH_SCOOTER_PATTERN = re.compile(r'\b([A-ZА-Я]{2}\d{4})\b', re.IGNORECASE)
 JET_SCOOTER_PATTERN = re.compile(r'\b(\d{3}-?\d{3})\b')
 
-BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|yandex|вуш|джет|яндекс)\s+(\d+)\b', re.IGNORECASE)
+# Updated BATCH_QUANTITY_PATTERN to include single-letter aliases (w, j, y)
+BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|yandex|вуш|джет|яндекс|w|j|y)\s+(\d+)\b', re.IGNORECASE)
 SERVICE_ALIASES = {
-    "yandex": "Яндекс", "яндекс": "Яндекс",
-    "whoosh": "Whoosh", "вуш": "Whoosh",
-    "jet": "Jet", "джет": "Jet"
+    "yandex": "Яндекс", "яндекс": "Яндекс", "y": "Яндекс", # Added "y"
+    "whoosh": "Whoosh", "вуш": "Whoosh", "w": "Whoosh",   # Added "w"
+    "jet": "Jet", "джет": "Jet", "j": "Jet"               # Added "j"
 }
-SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"}
+SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"} # This map is not used in the provided code, but kept for consistency.
 
-bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
+# Corrected Bot initialization for aiogram 3.x
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 db_executor = ThreadPoolExecutor(max_workers=5)
 
@@ -134,7 +137,7 @@ async def command_start_handler(message: Message):
     response = (
         f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
         f"Просто отправь мне номер самоката, и я его учту.\n"
-        f"Для пакетного приёма используй формат: `сервис количество` (например, `Яндекс 10`).\n\n"
+        f"Для пакетного приёма используй формат: `сервис количество` (например, `Яндекс 10`, `y 5`, `Whoosh 15`, `w 20`, `Jet 8`, `j 3`).\n\n"
         f"Я работаю в группах с ID: `{allowed_chats_info}` и в личных сообщениях с администраторами.\n"
         f"Твой ID чата: `{message.chat.id}`"
     )
@@ -143,7 +146,7 @@ async def command_start_handler(message: Message):
 @dp.message(Command("batch_accept"), IsAllowedChatFilter())
 async def batch_accept_handler(message: Message, command: CommandObject):
     if command.args is None:
-        await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20`", parse_mode="Markdown")
+        await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20` или `/batch_accept y 20`", parse_mode="Markdown")
         return
 
     args = command.args.split()
@@ -155,7 +158,7 @@ async def batch_accept_handler(message: Message, command: CommandObject):
     service = SERVICE_ALIASES.get(service_raw.lower())
 
     if not service:
-        await message.reply("Неизвестный сервис. Доступны: `Yandex`, `Whoosh`, `Jet`.", parse_mode="Markdown")
+        await message.reply("Неизвестный сервис. Доступны: `Yandex` (`y`), `Whoosh` (`w`), `Jet` (`j`).", parse_mode="Markdown")
         return
     try:
         quantity = int(quantity_str)
