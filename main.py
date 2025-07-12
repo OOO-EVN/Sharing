@@ -42,7 +42,6 @@ YANDEX_SCOOTER_PATTERN = re.compile(r'\b\d{8}\b')
 WOOSH_SCOOTER_PATTERN = re.compile(r'\b[A-Z]{2}\d{4}\b', re.IGNORECASE) 
 JET_SCOOTER_PATTERN = re.compile(r'\b\d{3}-?\d{3}\b') 
 
-# Новый паттерн для распознавания формата "Сервис Количество" (например, "Whoosh 19")
 BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|yandex)\s+(\d+)\b', re.IGNORECASE)
 SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"}
 
@@ -328,7 +327,6 @@ async def handle_scooter_numbers(message: types.Message) -> None:
     chat_id = message.chat.id
     timestamp_now_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
 
-    # 1. Попытка распознать формат "Сервис Количество"
     batch_matches = BATCH_QUANTITY_PATTERN.findall(text_to_check)
     
     if batch_matches:
@@ -341,12 +339,11 @@ async def handle_scooter_numbers(message: types.Message) -> None:
                 quantity = int(quantity_str)
                 if quantity > 0:
                     for i in range(quantity):
-                        # Создаем заглушку для номера самоката
                         placeholder_number = f"{service.upper()}_BATCH_{timestamp_now_str.replace(' ', '_').replace(':', '')}_{i+1}"
                         records_to_insert.append((placeholder_number, service, user_id, username, fullname, timestamp_now_str, chat_id))
                     accepted_by_service[service] += quantity
             except ValueError:
-                continue # Пропускаем, если количество не число
+                continue
 
         if records_to_insert:
             await async_insert_batch_scooter_records(records_to_insert)
@@ -359,9 +356,7 @@ async def handle_scooter_numbers(message: types.Message) -> None:
                 if count > 0:
                     response_parts.append(f"{service}: {count}")
             await message.reply("\n".join(response_parts), parse_mode=types.ParseMode.HTML)
-            return # Завершаем обработку, если успешно обработали пакетный ввод
-    
-    # 2. Если не найдено пакетных записей, пытаемся найти конкретные номера самокатов
+            return
     
     accepted_by_service = {"Яндекс": 0, "Whoosh": 0, "Jet": 0}
     
