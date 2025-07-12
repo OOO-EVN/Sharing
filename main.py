@@ -41,13 +41,13 @@ YANDEX_SCOOTER_PATTERN = re.compile(r'\b(\d{8})\b')
 WOOSH_SCOOTER_PATTERN = re.compile(r'\b([A-ZА-Я]{2}\d{4})\b', re.IGNORECASE)
 JET_SCOOTER_PATTERN = re.compile(r'\b(\d{3}-?\d{3})\b')
 
-BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|yandex|вуш|джет|яндекс)\s+(\d+)\b', re.IGNORECASE)
+BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|yandex|вуш|джет|яндекс|w|j|y)\s+(\d+)\b', re.IGNORECASE)
 SERVICE_ALIASES = {
-    "yandex": "Яндекс", "яндекс": "Яндекс",
-    "whoosh": "Whoosh", "вуш": "Whoosh",
-    "jet": "Jet", "джет": "Jet"
+    "yandex": "Яндекс", "яндекс": "Яндекс", "y": "Яндекс",
+    "whoosh": "Whoosh", "вуш": "Whoosh", "w": "Whoosh",
+    "jet": "Jet", "джет": "Jet", "j": "Jet"
 }
-SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"}
+SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"} # Этот словарь пока не используется явно в логике, но может быть полезен для отображения
 
 bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher()
@@ -155,7 +155,7 @@ async def batch_accept_handler(message: Message, command: CommandObject):
     service = SERVICE_ALIASES.get(service_raw.lower())
 
     if not service:
-        await message.reply("Неизвестный сервис. Доступны: `Yandex`, `Whoosh`, `Jet`.", parse_mode="Markdown")
+        await message.reply("Неизвестный сервис. Доступны: `Yandex`, `Whoosh`, `Jet` (или их сокращения: `y`, `w`, `j`).", parse_mode="Markdown")
         return
     try:
         quantity = int(quantity_str)
