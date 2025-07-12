@@ -13,12 +13,8 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject, BaseFilter
 from aiogram.types import Message
 from aiogram import F
-from aiogram.enums import ParseMode
-
-from dotenv import load_dotenv
-from openpyxl import Workbook
-from openpyxl.styles import Font
-from typing import List, Tuple # Убедитесь, что это импортировано
+from aiogram.enums import ParseMode # Импортируем ParseMode
+from typing import List, Tuple # Импортируем List и Tuple
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -122,7 +118,6 @@ def insert_batch_records(records_data: List[Tuple]):
         if conn:
             conn.close()
 
-# ИЗМЕНЕНА ЭТА СТРОКА
 async def db_write_batch(records_data: List[Tuple]):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(db_executor, insert_batch_records, records_data)
@@ -309,9 +304,12 @@ async def handle_scooter_numbers(message: Message):
     records_to_insert = []
     accepted_summary = defaultdict(int)
     
-    text_for_numbers = text
-
+    # Сначала найдем и обработаем все пакетные совпадения
     batch_matches = BATCH_QUANTITY_PATTERN.findall(text)
+    
+    # Создаем временную копию текста для удаления пакетных команд
+    temp_text_for_numbers = text
+
     if batch_matches:
         for service_raw, quantity_str in batch_matches:
             service = SERVICE_ALIASES.get(service_raw.lower())
@@ -322,9 +320,16 @@ async def handle_scooter_numbers(message: Message):
                         placeholder_number = f"{service.upper()}_BATCH_{i+1}"
                         records_to_insert.append((placeholder_number, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
                     accepted_summary[service] += quantity
+                    
+                    # Удаляем только что обработанную пакетную команду из temp_text_for_numbers
+                    # Используем re.sub с count=1 для удаления только первого найденного совпадения
+                    temp_text_for_numbers = re.sub(re.escape(f"{service_raw} {quantity_str}"), '', temp_text_for_numbers, 1, re.IGNORECASE).strip()
+
             except (ValueError, TypeError):
                 continue
-        text_for_numbers = BATCH_QUANTITY_PATTERN.sub('', text)
+        
+    # Теперь, после обработки пакетных команд, обрабатываем оставшийся текст на наличие отдельных номеров
+    text_for_individual_numbers = temp_text_for_numbers
 
     patterns = {
         "Яндекс": YANDEX_SCOOTER_PATTERN,
@@ -335,7 +340,7 @@ async def handle_scooter_numbers(message: Message):
     processed_numbers = set()
 
     for service, pattern in patterns.items():
-        numbers = pattern.findall(text_for_numbers)
+        numbers = pattern.findall(text_for_individual_numbers) # Ищем в очищенном тексте
         for num in numbers:
             clean_num = num.replace('-', '') if service == "Jet" else num.upper()
             
@@ -349,16 +354,18 @@ async def handle_scooter_numbers(message: Message):
     if not records_to_insert:
         return
 
-    await db_write_batch(records_to_insert)
-
     response_parts = []
-    user_mention = user.mention_html()
+    # user_mention = user.mention_html() # Удалена строка
     total_accepted = sum(accepted_summary.values())
-    response_parts.append(f"{user_mention}, принято {total_accepted} шт.:")
+    
+    if total_accepted > 0:
+        # Удалена строка с user_mention и общим количеством
+        for service, count in sorted(accepted_summary.items()):
+            if count > 0:
+                response_parts.append(f"  - <b>{service}</b>: {count} шт.")
+    else:
+        response_parts.append("Не удалось распознать номера самокатов или пакетные команды.")
 
-    for service, count in sorted(accepted_summary.items()):
-        if count > 0:
-            response_parts.append(f"  - <b>{service}</b>: {count} шт.")
 
     await message.reply("\n".join(response_parts))
 
