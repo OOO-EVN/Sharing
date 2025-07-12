@@ -13,11 +13,10 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject, BaseFilter
 from aiogram.types import Message
 from aiogram import F
-from aiogram.enums import ParseMode
+
 from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.styles import Font
-from typing import List, Tuple
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -48,9 +47,9 @@ SERVICE_ALIASES = {
     "whoosh": "Whoosh", "вуш": "Whoosh", "w": "Whoosh",
     "jet": "Jet", "джет": "Jet", "j": "Jet"
 }
-SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"} 
+SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"} # This map is not used in the provided code, but kept for consistency if it's used elsewhere.
 
-bot = Bot(token=BOT_TOKEN, default_parse_mode=ParseMode.HTML)
+bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher()
 db_executor = ThreadPoolExecutor(max_workers=5)
 
@@ -104,7 +103,7 @@ def init_db():
     run_db_query("CREATE INDEX IF NOT EXISTS idx_user_service ON accepted_scooters (accepted_by_user_id, service);")
     logging.info("База данных успешно инициализирована.")
 
-def insert_batch_records(records_data: List[Tuple]):
+def insert_batch_records(records_data: list[tuple]):
     conn = None
     try:
         conn = sqlite3.connect(DB_NAME, timeout=10)
@@ -121,7 +120,7 @@ def insert_batch_records(records_data: List[Tuple]):
         if conn:
             conn.close()
 
-async def db_write_batch(records_data: List[Tuple]):
+async def db_write_batch(records_data: list[tuple]):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(db_executor, insert_batch_records, records_data)
 
@@ -135,7 +134,7 @@ async def command_start_handler(message: Message):
     response = (
         f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
         f"Просто отправь мне номер самоката, и я его учту.\n"
-        f"Для пакетного приёма используй формат: `сервис количество` (например, `Яндекс 10`).\n\n"
+        f"Для пакетного приёма используй формат: `сервис количество` (например, `Яндекс 10`, `y 5`, `Whoosh 15`, `w 20`).\n\n"
         f"Я работаю в группах с ID: `{allowed_chats_info}` и в личных сообщениях с администраторами.\n"
         f"Твой ID чата: `{message.chat.id}`"
     )
@@ -144,7 +143,7 @@ async def command_start_handler(message: Message):
 @dp.message(Command("batch_accept"), IsAllowedChatFilter())
 async def batch_accept_handler(message: Message, command: CommandObject):
     if command.args is None:
-        await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20`", parse_mode="Markdown")
+        await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20` или `/batch_accept y 20`", parse_mode="Markdown")
         return
 
     args = command.args.split()
@@ -156,7 +155,7 @@ async def batch_accept_handler(message: Message, command: CommandObject):
     service = SERVICE_ALIASES.get(service_raw.lower())
 
     if not service:
-        await message.reply("Неизвестный сервис. Доступны: `Yandex`, `Whoosh`, `Jet` (или их сокращения: `y`, `w`, `j`).", parse_mode="Markdown")
+        await message.reply("Неизвестный сервис. Доступны: `Yandex` (`y`), `Whoosh` (`w`), `Jet` (`j`).", parse_mode="Markdown")
         return
     try:
         quantity = int(quantity_str)
@@ -199,22 +198,17 @@ async def today_stats_handler(message: Message):
         if user_id not in user_info:
             user_info[user_id] = f"@{username}" if username else fullname
 
-    response_parts = [] # Убрана строка "Статистика за сегодня:"
-    total_all_users = 0 # Эта переменная нужна для расчета, но не для вывода в этом формате
+    response_parts = ["<b>Статистика за сегодня:</b>"]
+    total_all_users = 0
 
     for user_id, services in user_stats.items():
         user_total = sum(services.values())
-        total_all_users += user_total # Обновляем общий итог, если он нужен для других целей, но не выводим
-        
-        # Формируем упоминание или имя
-        user_display_name = user_info[user_id]
-        
-        # Добавляем строку с упоминанием и общим количеством для этого пользователя
-        response_parts.append(f"{user_display_name} - всего: {user_total} шт.")
+        total_all_users += user_total
+        response_parts.append(f"\n<b>{user_info[user_id]}</b> - всего: {user_total} шт.")
         for service, count in sorted(services.items()):
-            response_parts.append(f"  - <b>{service}</b>: {count} шт.")
+            response_parts.append(f"  - {service}: {count} шт.")
 
-    # Убрана строка с "Общий итог за сегодня: {total_all_users} шт."
+    response_parts.append(f"\n<b>Общий итог за сегодня: {total_all_users} шт.</b>")
     await message.answer("\n".join(response_parts))
 
 @dp.message(Command("export_today_excel", "export_all_excel"), IsAdminFilter())
@@ -241,7 +235,7 @@ async def export_excel_handler(message: Message, command: CommandObject):
     filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
     await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
 
-def create_excel_report(records: List[Tuple]) -> BytesIO:
+def create_excel_report(records: list[tuple]) -> BytesIO:
     wb = Workbook()
     ws = wb.active
     ws.title = "Данные"
@@ -312,9 +306,9 @@ async def handle_scooter_numbers(message: Message):
     records_to_insert = []
     accepted_summary = defaultdict(int)
     
-    batch_matches = BATCH_QUANTITY_PATTERN.findall(text)
-    temp_text_for_numbers = text
+    text_for_numbers = text
 
+    batch_matches = BATCH_QUANTITY_PATTERN.findall(text)
     if batch_matches:
         for service_raw, quantity_str in batch_matches:
             service = SERVICE_ALIASES.get(service_raw.lower())
@@ -325,13 +319,9 @@ async def handle_scooter_numbers(message: Message):
                         placeholder_number = f"{service.upper()}_BATCH_{i+1}"
                         records_to_insert.append((placeholder_number, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
                     accepted_summary[service] += quantity
-                    
-                    temp_text_for_numbers = re.sub(re.escape(f"{service_raw} {quantity_str}"), '', temp_text_for_numbers, 1, re.IGNORECASE).strip()
-
             except (ValueError, TypeError):
                 continue
-        
-    text_for_individual_numbers = temp_text_for_numbers
+        text_for_numbers = BATCH_QUANTITY_PATTERN.sub('', text)
 
     patterns = {
         "Яндекс": YANDEX_SCOOTER_PATTERN,
@@ -342,7 +332,7 @@ async def handle_scooter_numbers(message: Message):
     processed_numbers = set()
 
     for service, pattern in patterns.items():
-        numbers = pattern.findall(text_for_individual_numbers)
+        numbers = pattern.findall(text_for_numbers)
         for num in numbers:
             clean_num = num.replace('-', '') if service == "Jet" else num.upper()
             
@@ -359,15 +349,13 @@ async def handle_scooter_numbers(message: Message):
     await db_write_batch(records_to_insert)
 
     response_parts = []
+    user_mention = user.mention_html()
     total_accepted = sum(accepted_summary.values())
-    
-    if total_accepted > 0:
-        for service, count in sorted(accepted_summary.items()):
-            if count > 0:
-                response_parts.append(f"  - <b>{service}</b>: {count} шт.")
-    else:
-        response_parts.append("Не удалось распознать номера самокатов или пакетные команды.")
+    response_parts.append(f"{user_mention}, принято {total_accepted} шт.:")
 
+    for service, count in sorted(accepted_summary.items()):
+        if count > 0:
+            response_parts.append(f"  - <b>{service}</b>: {count} шт.")
 
     await message.reply("\n".join(response_parts))
 
