@@ -8,13 +8,14 @@ import pytz
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
-from typing import List, Tuple # <--- ЭТО ВАЖНОЕ ИЗМЕНЕНИЕ ДЛЯ СТАРЫХ ВЕРСИЙ PYTHON
+from typing import List, Tuple
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject, BaseFilter
-from aiogram.types import Message, FSInputFile # FSInputFile уже был добавлен ранее
+from aiogram.types import Message, FSInputFile
 from aiogram import F
-from aiogram.client.default import DefaultBotProperties # Это для aiogram 3.x, который у вас 3.13
+from aiogram.client.default import DefaultBotProperties
+from aiogram.exceptions import TelegramNetworkError, AiogramError # Добавляем для перехвата ошибок Telegram
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -105,7 +106,7 @@ def init_db():
     run_db_query("CREATE INDEX IF NOT EXISTS idx_user_service ON accepted_scooters (accepted_by_user_id, service);")
     logging.info("База данных успешно инициализирована.")
 
-def insert_batch_records(records_data: List[Tuple]): # <--- ИЗМЕНЕНО: List[Tuple] вместо list[tuple]
+def insert_batch_records(records_data: List[Tuple]):
     conn = None
     try:
         conn = sqlite3.connect(DB_NAME, timeout=10)
@@ -122,7 +123,7 @@ def insert_batch_records(records_data: List[Tuple]): # <--- ИЗМЕНЕНО: Li
         if conn:
             conn.close()
 
-async def db_write_batch(records_data: List[Tuple]): # <--- ИЗМЕНЕНО: List[Tuple] вместо list[tuple]
+async def db_write_batch(records_data: List[Tuple]):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(db_executor, insert_batch_records, records_data)
 
@@ -230,14 +231,29 @@ async def export_excel_handler(message: Message, command: CommandObject):
 
     if not records:
         await message.answer("Нет данных для экспорта.")
+        logging.info(f"Нет данных для экспорта отчета {date_filter}.")
         return
 
-    excel_file = create_excel_report(records)
-    report_type = "today" if is_today else "full"
-    filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
-    await bot.send_document(message.chat.id, FSInputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
+    try:
+        excel_file = create_excel_report(records)
+        report_type = "today" if is_today else "full"
+        filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
+        
+        logging.info(f"Попытка отправить Excel файл: {filename}, размер: {excel_file.getbuffer().nbytes} байт.")
+        await bot.send_document(message.chat.id, FSInputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
+        logging.info(f"Excel файл {filename} успешно отправлен.")
+    except TelegramNetworkError as e:
+        logging.error(f"Сетевая ошибка при отправке Excel файла: {e}", exc_info=True)
+        await message.answer("Произошла сетевая ошибка при отправке отчета. Пожалуйста, попробуйте позже.")
+    except AiogramError as e:
+        logging.error(f"Ошибка aiogram при отправке Excel файла: {e}", exc_info=True)
+        await message.answer(f"Произошла ошибка при отправке отчета: {e}. Пожалуйста, свяжитесь с администратором.")
+    except Exception as e:
+        logging.error(f"Неизвестная ошибка при отправке Excel файла: {e}", exc_info=True)
+        await message.answer("Произошла непредвиденная ошибка при отправке отчета. Пожалуйста, свяжитесь с администратором.")
 
-def create_excel_report(records: List[Tuple]) -> BytesIO: # <--- ИЗМЕНЕНО: List[Tuple] вместо list[tuple]
+
+def create_excel_report(records: List[Tuple]) -> BytesIO:
     wb = Workbook()
     ws = wb.active
     ws.title = "Данные"
