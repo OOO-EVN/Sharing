@@ -142,7 +142,7 @@ async def command_start_handler(message: types.Message):
     allowed_chats_info = ', '.join(map(str, ALLOWED_CHAT_IDS)) if ALLOWED_CHAT_IDS else "не указаны"
     response = (
         f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
-        f"Просто отправь мне номер самоката, и я его учту.\n"
+        f"Просто отправь мне **номер самоката текстом** или **фотографию с номером в подписи**.\n"
         f"Для пакетного приёма используй формат: `сервис количество` (например, `Яндекс 10`, `y 5`, `Whoosh 15`, `w 20`, `Jet 8`, `j 3`).\n\n"
         f"Я работаю в группах с ID: `{allowed_chats_info}` и в личных сообщениях с администраторами.\n"
         f"Твой ID чата: `{message.chat.id}`"
@@ -307,21 +307,18 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
     buffer.seek(0)
     return buffer
 
-@dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.TEXT)
-async def handle_scooter_numbers(message: types.Message):
-    text = message.text
-    if not text:
-        return
-
+# --- Унифицированная функция для обработки текста из любого источника (сообщения или подписи) ---
+async def process_scooter_text(message: types.Message, text_to_process: str):
     user = message.from_user
     now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
 
     records_to_insert = []
     accepted_summary = defaultdict(int)
     
-    text_for_numbers = text
+    text_for_numbers = text_to_process
 
-    batch_matches = BATCH_QUANTITY_PATTERN.findall(text)
+    # Поиск пакетных записей
+    batch_matches = BATCH_QUANTITY_PATTERN.findall(text_to_process)
     if batch_matches:
         for service_raw, quantity_str in batch_matches:
             service = SERVICE_ALIASES.get(service_raw.lower())
@@ -334,8 +331,10 @@ async def handle_scooter_numbers(message: types.Message):
                     accepted_summary[service] += quantity
             except (ValueError, TypeError):
                 continue
-        text_for_numbers = BATCH_QUANTITY_PATTERN.sub('', text)
+        # Удаляем обработанные пакетные записи из текста, чтобы они не мешали поиску одиночных номеров
+        text_for_numbers = BATCH_QUANTITY_PATTERN.sub('', text_to_process)
 
+    # Поиск одиночных номеров
     patterns = {
         "Яндекс": YANDEX_SCOOTER_PATTERN,
         "Whoosh": WOOSH_SCOOTER_PATTERN,
@@ -357,7 +356,7 @@ async def handle_scooter_numbers(message: types.Message):
             processed_numbers.add(clean_num)
 
     if not records_to_insert:
-        return
+        return False # Ничего не найдено и не обработано
 
     await db_write_batch(records_to_insert)
 
@@ -371,6 +370,40 @@ async def handle_scooter_numbers(message: types.Message):
             response_parts.append(f"  - <b>{service}</b>: {count} шт.")
 
     await message.reply("\n".join(response_parts))
+    return True # Что-то было найдено и обработано
+
+
+# --- ОБРАБОТЧИК ДЛЯ ОБЫЧНЫХ ТЕКСТОВЫХ СООБЩЕНИЙ ---
+@dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.TEXT)
+async def handle_text_messages(message: types.Message):
+    # Если сообщение является командой, пропускаем
+    if message.text.startswith('/'):
+        return
+    await process_scooter_text(message, message.text)
+
+# --- ОБРАБОТЧИК ДЛЯ ФОТОГРАФИЙ ---
+@dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.PHOTO)
+async def handle_photo_messages(message: types.Message):
+    if message.caption:
+        # Если у фото есть подпись, пытаемся её обработать
+        await process_scooter_text(message, message.caption)
+    else:
+        # Если подписи нет, сообщаем пользователю
+        await message.reply("Я получил фотографию, но без текстовой подписи. "
+                            "Пожалуйста, добавьте номер самоката в подпись к фото.")
+
+# --- ОБРАБОТЧИК ДЛЯ ВСЕХ ОСТАЛЬНЫХ ТИПОВ КОНТЕНТА (ВИДЕО, АУДИО, ДОКУМЕНТЫ И Т.Д.) ---
+# Этот обработчик должен быть ПОСЛЕДНИМ, чтобы не перехватывать другие типы сообщений.
+@dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.ANY)
+async def handle_unsupported_content(message: types.Message):
+    # Игнорируем команды, т.к. они обрабатываются выше
+    if message.text and message.text.startswith('/'):
+        return
+    # Если это не фото и не обычный текст, сообщаем пользователю, что не поддерживаем
+    if not (message.photo or message.text): # Проверяем, что это не фото и не текстовое сообщение
+        await message.reply("Извините, я могу обрабатывать только текстовые сообщения и фотографии (с подписями). "
+                            "Видео, документы и другие файлы я не поддерживаю.")
+
 
 async def on_startup(dispatcher: Dispatcher):
     global db_executor # Объявляем, что используем глобальную переменную
