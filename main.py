@@ -22,7 +22,6 @@ from openpyxl.utils import get_column_letter
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logging.getLogger('aiogram').setLevel(logging.DEBUG)
 
 load_dotenv()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -60,23 +59,31 @@ dp.middleware.setup(ThrottlingMiddleware(rate_limit=1, rate_limit_timeout=5))
 
 db_executor = None
 scheduler = None
+user_errors = defaultdict(int)  # Track consecutive invalid messages per user
 
 class IsAdminFilter(BoundFilter):
+    """Фильтр для проверки, является ли отправитель сообщения администратором."""
     async def check(self, message: types.Message) -> bool:
         return message.from_user.id in ADMIN_IDS
 
 class IsAllowedChatFilter(BoundFilter):
+    """Фильтр для проверки, разрешен ли данный чат для работы бота."""
     async def check(self, message: types.Message) -> bool:
         if message.chat.type == 'private' and message.from_user.id in ADMIN_IDS:
-            logging.debug(f"IsAllowedChatFilter: Доступ разрешен для админа {message.from_user.id} в приватном чате.")
             return True
         if message.chat.type in ['group', 'supergroup'] and message.chat.id in ALLOWED_CHAT_IDS:
-            logging.debug(f"IsAllowedChatFilter: Доступ разрешен для чата {message.chat.id}.")
             return True
-        logging.warning(f"IsAllowedChatFilter: Сообщение от {message.from_user.id} в чате {message.chat.id} заблокировано.")
+        logging.warning(f"Сообщение от {message.from_user.id} в чате {message.chat.id} было заблокировано фильтром IsAllowedChatFilter.")
         return False
 
 def run_db_query(query: str, params: tuple = (), fetch: str = None):
+    """
+    Выполняет SQL-запрос к базе данных.
+    :param query: SQL-запрос.
+    :param params: Параметры запроса.
+    :param fetch: 'one' для получения одной записи, 'all' для всех записей, None для без возврата (INSERT/UPDATE/DELETE).
+    :return: Результат запроса или None в случае ошибки.
+    """
     conn = None
     try:
         conn = sqlite3.connect(DB_NAME, timeout=10)
@@ -97,6 +104,7 @@ def run_db_query(query: str, params: tuple = (), fetch: str = None):
             conn.close()
 
 def init_db():
+    """Инициализирует (создает, если не существует) таблицы базы данных."""
     run_db_query('''
         CREATE TABLE IF NOT EXISTS accepted_scooters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,6 +122,10 @@ def init_db():
     logging.info("База данных успешно инициализирована.")
 
 def insert_batch_records(records_data: List[Tuple]):
+    """
+    Выполняет пакетную вставку записей в таблицу accepted_scooters.
+    :param records_data: Список кортежей с данными для вставки.
+    """
     conn = None
     try:
         conn = sqlite3.connect(DB_NAME, timeout=10)
@@ -131,18 +143,20 @@ def insert_batch_records(records_data: List[Tuple]):
             conn.close()
 
 async def db_write_batch(records_data: List[Tuple]):
+    """Асинхронно записывает пакет данных в БД."""
     loop = asyncio.get_running_loop()
     global db_executor
     await loop.run_in_executor(db_executor, insert_batch_records, records_data)
 
 async def db_fetch_all(query: str, params: tuple = ()):
+    """Асинхронно выполняет запрос на выборку всех данных из БД."""
     loop = asyncio.get_running_loop()
     global db_executor
     return await loop.run_in_executor(db_executor, run_db_query, query, params, 'all')
 
 @dp.message_handler(IsAllowedChatFilter(), commands="start")
 async def command_start_handler(message: types.Message):
-    logging.info(f"Получена команда /start от пользователя {message.from_user.id} в чате {message.chat.id}")
+    """Обработчик команды /start."""
     allowed_chats_info = ', '.join(map(str, ALLOWED_CHAT_IDS)) if ALLOWED_CHAT_IDS else "не указаны"
     response = (
         f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
@@ -172,7 +186,7 @@ async def command_help_handler(message: types.Message):
 
 @dp.message_handler(IsAllowedChatFilter(), commands="batch_accept")
 async def batch_accept_handler(message: types.Message):
-    logging.info(f"Получена команда /batch_accept от пользователя {message.from_user.id} в чате {message.chat.id}")
+    """Обработчик команды /batch_accept для пакетного приема самокатов."""
     args = message.get_args().split()
     if len(args) != 2:
         await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20` или `/batch_accept y 20`", parse_mode="Markdown")
@@ -200,8 +214,15 @@ async def batch_accept_handler(message: types.Message):
     await db_write_batch(records_to_insert)
     user_mention = types.User.get_mention(user)
     await message.reply(f"{user_mention}, принято {quantity} самокатов сервиса <b>{service}</b>.")
+    global user_errors
+    user_errors[message.from_user.id] = 0  # Reset error count on successful input
 
 def get_shift_time_range_for_report(shift_type: str):
+    """
+    Определяет время начала и конца смены для формирования отчета.
+    :param shift_type: Тип смены ('morning' или 'evening').
+    :return: Кортеж (start_time, end_time, shift_name).
+    """
     now = datetime.datetime.now(TIMEZONE)
     today = now.date()
     if shift_type == 'morning':
@@ -219,6 +240,11 @@ def get_shift_time_range_for_report(shift_type: str):
     return start_time, end_time, shift_name
 
 def get_shift_time_range():
+    """
+    Определяет текущую смену и ее временной диапазон относительно текущего времени.
+    Используется для команды /today_stats.
+    :return: Кортеж (start_time, end_time, shift_name).
+    """
     now = datetime.datetime.now(TIMEZONE)
     today = now.date()
     morning_shift_start = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(7, 0, 0)))
@@ -242,7 +268,10 @@ def get_shift_time_range():
 
 @dp.message_handler(IsAdminFilter(), commands="today_stats")
 async def today_stats_handler(message: types.Message):
-    logging.info(f"Получена команда /today_stats от пользователя {message.from_user.id} в чате {message.chat.id}")
+    """
+    Отправляет статистику по принятым самокатам за текущую смену.
+    Доступно только администраторам.
+    """
     start_time, end_time, shift_name = get_shift_time_range()
     start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -284,7 +313,10 @@ async def today_stats_handler(message: types.Message):
 
 @dp.message_handler(IsAdminFilter(), commands=["export_today_excel", "export_all_excel"])
 async def export_excel_handler(message: types.Message):
-    logging.info(f"Получена команда {message.get_command()} от пользователя {message.from_user.id} в чате {message.chat.id}")
+    """
+    Экспортирует данные о принятых самокатах в Excel файл.
+    Доступно только администраторам.
+    """
     is_today_shift = message.get_command() == '/export_today_excel'
     await message.answer(f"Формирую отчет...")
     query = "SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters"
@@ -314,6 +346,11 @@ async def export_excel_handler(message: types.Message):
         await message.answer("Произошла ошибка при отправке отчета. Пожалуйста, свяжитесь с администратором.")
 
 def create_excel_report(records: List[Tuple]) -> BytesIO:
+    """
+    Создает Excel отчет с отдельными листами для каждого пользователя.
+    :param records: Список кортежей с данными из БД.
+    :return: Объект BytesIO, содержащий Excel файл.
+    """
     wb = Workbook()
     if 'Sheet' in wb.sheetnames:
         del wb['Sheet']
@@ -395,26 +432,32 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
     return buffer
 
 async def process_scooter_text(message: types.Message, text_to_process: str):
-    logging.info(f"Вход в process_scooter_text для пользователя {message.from_user.id} с текстом: '{text_to_process}'")
-    text_to_process = ' '.join(text_to_process.strip().split())
+    """
+    Обрабатывает текстовые сообщения на предмет номеров самокатов или пакетного приема.
+    :param message: Объект сообщения Telegram.
+    :param text_to_process: Текст для обработки (может быть подписью фото).
+    :return: True, если что-то было принято, False в противном случае.
+    """
+    global user_errors
+    text_to_process = ' '.join(text_to_process.strip().split())  # Normalize spaces
     if not text_to_process.strip():
-        await message.reply("Сообщение пустое. Пожалуйста, отправьте номер самоката или `сервис количество`.")
+        user_errors[message.from_user.id] += 1
+        if user_errors[message.from_user.id] % 2 == 0:  # Reply only on every second invalid message
+            await message.reply("Сообщение пустое. Пожалуйста, отправьте номер самоката или `сервис количество`. Используйте /help для справки.")
         return False
-
     user = message.from_user
     now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
     records_to_insert = []
     accepted_summary = defaultdict(int)
     text_for_numbers = text_to_process
-
-    # Пакетный прием
     batch_matches = BATCH_QUANTITY_PATTERN.findall(text_to_process)
     if batch_matches:
-        logging.info(f"Найдены пакетные совпадения: {batch_matches}")
         for service_raw, quantity_str in batch_matches:
             service = SERVICE_ALIASES.get(service_raw.lower())
             if not service:
-                await message.reply(f"Неизвестный сервис '{service_raw}'. Доступны: `Yandex (y)`, `Whoosh (w)`, `Jet (j)`.")
+                user_errors[message.from_user.id] += 1
+                if user_errors[message.from_user.id] % 2 == 0:
+                    await message.reply(f"Неизвестный сервис '{service_raw}'. Доступны: `Yandex (y)`, `Whoosh (w)`, `Jet (j)`. Используйте /help для справки.")
                 continue
             try:
                 quantity = int(quantity_str)
@@ -424,13 +467,11 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
                         records_to_insert.append((placeholder_number, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
                     accepted_summary[service] += quantity
             except (ValueError, TypeError):
-                logging.warning(f"Ошибка при парсинге пакетного приема: service_raw={service_raw}, quantity_str={quantity_str}")
+                user_errors[message.from_user.id] += 1
+                if user_errors[message.from_user.id] % 2 == 0:
+                    await message.reply("Количество должно быть числом от 1 до 200. Используйте /help для справки.")
                 continue
         text_for_numbers = BATCH_QUANTITY_PATTERN.sub('', text_to_process)
-    else:
-        logging.info("Пакетных совпадений не найдено.")
-
-    # Одиночные номера самокатов
     patterns = {
         "Яндекс": YANDEX_SCOOTER_PATTERN,
         "Whoosh": WOOSH_SCOOTER_PATTERN,
@@ -439,25 +480,27 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
     processed_numbers = set()
     for service, pattern in patterns.items():
         numbers = pattern.findall(text_for_numbers)
-        if numbers:
-            logging.info(f"Найдены номера для сервиса {service}: {numbers}")
         for num in numbers:
             clean_num = num.replace('-', '') if service == "Jet" else num.upper()
             if clean_num in processed_numbers:
-                logging.info(f"Номер '{clean_num}' уже обработан, пропускаем.")
                 continue
             records_to_insert.append((clean_num, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
             accepted_summary[service] += 1
             processed_numbers.add(clean_num)
-
-    # Исправленный блок: не отправляем ошибку пользователю
     if not records_to_insert:
-        logging.info(f"records_to_insert пуст. Сообщение не распознано, но не отвечаем пользователю.")
+        user_errors[message.from_user.id] += 1
+        if user_errors[message.from_user.id] % 2 == 0:
+            await message.reply(
+                "Не удалось распознать номера самокатов или формат пакетного приема. "
+                "Пожалуйста, используйте:\n"
+                "- Для Яндекс: 8 цифр (например, `12345678`)\n"
+                "- Для Whoosh: 2 буквы + 4 цифры (например, `AB1234`)\n"
+                "- Для Jet: 6 цифр или 3-3 с дефисом (например, `123456` или `123-456`)\n"
+                "- Для пакетного приема: `сервис количество` (например, `Yandex 10`, `w 5`, `Jet 3`)\n"
+                "Используйте /help для справки."
+            )
         return False
-
-    logging.info(f"Найдено записей для вставки: {len(records_to_insert)}. Суммарно: {accepted_summary}")
     await db_write_batch(records_to_insert)
-
     response_parts = []
     user_mention = types.User.get_mention(user)
     total_accepted = sum(accepted_summary.values())
@@ -465,45 +508,62 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
     for service, count in sorted(accepted_summary.items()):
         if count > 0:
             response_parts.append(f"  - <b>{service}</b>: {count} шт.")
-
     await message.reply("\n".join(response_parts))
+    user_errors[message.from_user.id] = 0  # Reset error count on successful input
     return True
+
 @dp.message_handler(IsAllowedChatFilter(), regexp=r'import\s+(asyncio|re|os|sqlite3)')
 async def handle_code_messages(message: types.Message):
-    logging.warning(f"Code-like message detected from {message.from_user.id}: {message.text[:50]}...")
-    await message.reply("Ошибка: отправка кода не поддерживается. Используйте номера самокатов или формат `сервис количество`.")
+    global user_errors
+    user_errors[message.from_user.id] += 1
+    if user_errors[message.from_user.id] % 2 == 0:
+        await message.reply("Ошибка: отправка кода не поддерживается. Используйте номера самокатов или формат `сервис количество`. Используйте /help для справки.")
 
 @dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.TEXT, regexp=r'^(?!/).*$')
 async def handle_text_messages(message: types.Message):
-    logging.info(f"handle_text_messages сработал для чата {message.chat.id}, пользователь {message.from_user.id}, текст: '{message.text}'")
+    """
+    Обрабатывает текстовые сообщения пользователя, которые не являются командами.
+    """
     await process_scooter_text(message, message.text)
 
 @dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.PHOTO)
 async def handle_photo_messages(message: types.Message):
-    logging.info(f"handle_photo_messages сработал для чата {message.chat.id}, пользователь {message.from_user.id}, подпись: '{message.caption}'")
+    """
+    Обрабатывает фотографии с подписями. Подпись передается для распознавания номеров.
+    """
+    global user_errors
     if message.caption:
         await process_scooter_text(message, message.caption)
     else:
-        logging.info(f"Фото без подписи от {message.from_user.id} в чате {message.chat.id}")
-        await message.reply("Пожалуйста, добавьте номер самоката в подпись к фотографии.")
+        user_errors[message.from_user.id] += 1
+        if user_errors[message.from_user.id] % 2 == 0:
+            await message.reply("Пожалуйста, добавьте номер самоката в подпись к фотографии. Используйте /help для справки.")
 
 @dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.ANY)
 async def handle_unsupported_content(message: types.Message):
-    logging.info(f"handle_unsupported_content сработал для чата {message.chat.id}, пользователь {message.from_user.id}, тип: {message.content_type}")
+    """
+    Обрабатывает любые сообщения, которые не были перехвачены другими, более специфическими обработчиками.
+    Это помогает избежать спама ответами на неподдерживаемый контент.
+    """
+    global user_errors
     if message.text and message.text.startswith('/'):
-        logging.info(f"Сообщение - команда, игнорируем в handle_unsupported_content: {message.text}")
         return
     if not (message.photo or message.text):
-        await message.reply("Извините, я могу обрабатывать только текстовые сообщения и фотографии (с подписями).")
-        logging.info(f"Отправлен ответ о неподдерживаемом типе контента: {message.content_type}")
+        user_errors[message.from_user.id] += 1
+        if user_errors[message.from_user.id] % 2 == 0:
+            await message.reply("Извините, я могу обрабатывать только текстовые сообщения и фотографии (с подписями). Используйте /help для справки.")
         return
-    logging.info(f"Сообщение было текстом/фото с подписью, но не распознано в process_scooter_text. Тип: {message.content_type}, текст: '{message.text or message.caption}'")
 
 async def send_scheduled_report(shift_type: str):
+    """
+    Функция для отправки автоматического отчета по расписанию.
+    Отправляет Excel файл с данными за указанную смену в REPORT_CHAT_IDS.
+    :param shift_type: Тип смены ('morning' или 'evening').
+    """
     logging.info(f"Запуск отправки автоматического отчета для {shift_type} смены.")
     start_time, end_time, shift_name = get_shift_time_range_for_report(shift_type)
     if not start_time or not end_time:
-        logging.error(f"Не удалось определить временной диапазон для отчета '{shift_type}' смены.")
+        logging.error(f"Не удалось определить временной диапазон для отчета '{shift_type}' смены. Проверьте TIMEZONE или логику get_shift_time_range_for_report.")
         return
     start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -539,6 +599,7 @@ async def send_scheduled_report(shift_type: str):
                 logging.error(f"Не удалось отправить уведомление об ошибке администратору {admin_id}: {err}")
 
 async def on_startup(dispatcher: Dispatcher):
+    """Действия при запуске бота: инициализация БД, планировщика, установка команд."""
     await dispatcher.bot.delete_webhook()
     logging.info("Webhook disabled, running in polling mode.")
     global db_executor
@@ -548,7 +609,9 @@ async def on_startup(dispatcher: Dispatcher):
     global scheduler
     scheduler = AsyncIOScheduler(timezone=str(TIMEZONE))
     scheduler.add_job(send_scheduled_report, 'cron', hour=15, minute=0, timezone=str(TIMEZONE), args=['morning'])
+    logging.info("Задача для отправки утреннего отчета (в 15:00) запланирована.")
     scheduler.add_job(send_scheduled_report, 'cron', hour=4, minute=0, timezone=str(TIMEZONE), args=['evening'])
+    logging.info("Задача для отправки вечернего отчета (в 04:00) запланирована.")
     scheduler.start()
     logging.info("APScheduler запущен.")
     admin_commands = [
@@ -563,6 +626,7 @@ async def on_startup(dispatcher: Dispatcher):
     logging.info("Бот запущен и команды установлены.")
 
 async def on_shutdown(dispatcher: Dispatcher):
+    """Действия при остановке бота: остановка пула потоков БД и планировщика."""
     global db_executor
     if db_executor:
         db_executor.shutdown(wait=True)
