@@ -198,11 +198,9 @@ async def today_stats_handler(message: types.Message):
 
     user_stats = defaultdict(lambda: defaultdict(int))
     user_info = {}
-    service_totals = defaultdict(int)
 
     for service, user_id, username, fullname in records:
         user_stats[user_id][service] += 1
-        service_totals[service] += 1
         if user_id not in user_info:
             user_info[user_id] = f"@{username}" if username else fullname
 
@@ -216,28 +214,21 @@ async def today_stats_handler(message: types.Message):
         for service, count in sorted(services.items()):
             response_parts.append(f"  - {service}: {count} шт.")
 
-    response_parts.append("\n<b>Итог по сервисам:</b>")
-    for service, count in sorted(service_totals.items()):
-        response_parts.append(f"<b>{service}</b>: {count} шт.")
-
     response_parts.append(f"\n<b>Общий итог за сегодня: {total_all_users} шт.</b>")
     
-    MESSAGE_LIMIT = 4000  # Максимальная длина сообщения в Telegram - 4096 символов. Оставим запас.
-    current_message_parts = []
-    
-    for part in response_parts:
-        # Проверяем, если добавление текущей части превысит лимит
-        if len("\n".join(current_message_parts + [part])) > MESSAGE_LIMIT:
-            # Отправляем текущие накопленные части
-            if current_message_parts:
-                await message.answer("\n".join(current_message_parts))
-                current_message_parts = [] # Очищаем для новой части
-        current_message_parts.append(part)
-    
-    # Отправляем оставшиеся части
-    if current_message_parts:
-        await message.answer("\n".join(current_message_parts))
+    full_response_text = "\n".join(response_parts)
 
+    # Проверяем длину сообщения перед отправкой
+    # Максимальная длина сообщения в Telegram - 4096 символов
+    # Оставим запас, например, 3800 символов, чтобы учесть HTML-разметку и потенциальные изменения
+    if len(full_response_text) > 3800:
+        logging.warning(f"Сообщение со статистикой превышает лимит ({len(full_response_text)} символов).")
+        await message.answer(
+            "Статистика за сегодня слишком большая, чтобы отправить её в одном сообщении. "
+            "Пожалуйста, используйте команду /export_today_excel для получения полного отчета."
+        )
+    else:
+        await message.answer(full_response_text)
 
 @dp.message_handler(IsAdminFilter(), commands=["export_today_excel", "export_all_excel"])
 async def export_excel_handler(message: types.Message):
@@ -266,6 +257,7 @@ async def export_excel_handler(message: types.Message):
         
         logging.info(f"Попытка отправить Excel файл: {filename}, размер: {excel_file.getbuffer().nbytes} байт.")
         await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
+        logging.info(f"Excel файл {filename} успешно отправлен.")
     except Exception as e:
         logging.error(f"Ошибка при отправке Excel файла: {e}", exc_info=True)
         await message.answer("Произошла ошибка при отправке отчета. Пожалуйста, свяжитесь с администратором.")
