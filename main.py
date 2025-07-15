@@ -447,17 +447,9 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
             records_to_insert.append((clean_num, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
             accepted_summary[service] += 1
             processed_numbers.add(clean_num)
-    if not records_to_insert:
-        logging.info(f"records_to_insert пуст. Отправляется сообщение об ошибке распознавания.")
-        await message.reply(
-            "Не удалось распознать номера самокатов или формат пакетного приема. "
-            "Пожалуйста, используйте:\n"
-            "- Для Яндекс: 8 цифр (например, `12345678`)\n"
-            "- Для Whoosh: 2 буквы + 4 цифры (например, `AB1234`)\n"
-            "- Для Jet: 6 цифр или 3-3 с дефисом (например, `123456` или `123-456`)\n"
-            "- Для пакетного приема: `сервис количество` (например, `Yandex 10`, `w 5`, `Jet 3`)"
-        )
-        return False
+if not records_to_insert:
+    logging.info(f"records_to_insert пуст. Сообщение не распознано, но не отвечаем пользователю.")
+    return False
     logging.info(f"Найдено записей для вставки: {len(records_to_insert)}. Суммарно: {accepted_summary}")
     await db_write_batch(records_to_insert)
     response_parts = []
