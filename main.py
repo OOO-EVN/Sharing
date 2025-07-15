@@ -27,6 +27,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Установим уровень DEBUG для aiogram, чтобы видеть больше внутренней информации
+logging.getLogger('aiogram').setLevel(logging.DEBUG)
+
 
 # Загрузка переменных окружения из .env файла
 load_dotenv()
@@ -85,11 +88,13 @@ class IsAllowedChatFilter(BoundFilter):
     async def check(self, message: types.Message) -> bool:
         # Разрешаем администраторам использовать бота в личных сообщениях
         if message.chat.type == 'private' and message.from_user.id in ADMIN_IDS:
+            logging.debug(f"IsAllowedChatFilter: Доступ разрешен для админа {message.from_user.id} в приватном чате.")
             return True
         # Разрешаем в указанных группах
         if message.chat.type in ['group', 'supergroup'] and message.chat.id in ALLOWED_CHAT_IDS:
+            logging.debug(f"IsAllowedChatFilter: Доступ разрешен для чата {message.chat.id}.")
             return True
-        logging.warning(f"Сообщение от {message.from_user.id} в чате {message.chat.id} было заблокировано фильтром IsAllowedChatFilter.")
+        logging.warning(f"IsAllowedChatFilter: Сообщение от {message.from_user.id} в чате {message.chat.id} заблокировано.")
         return False
 
 # --- Функции для работы с базой данных ---
@@ -175,6 +180,7 @@ async def db_fetch_all(query: str, params: tuple = ()):
 @dp.message_handler(IsAllowedChatFilter(), commands="start")
 async def command_start_handler(message: types.Message):
     """Обработчик команды /start."""
+    logging.info(f"Получена команда /start от пользователя {message.from_user.id} в чате {message.chat.id}")
     allowed_chats_info = ', '.join(map(str, ALLOWED_CHAT_IDS)) if ALLOWED_CHAT_IDS else "не указаны"
     response = (
         f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
@@ -188,6 +194,7 @@ async def command_start_handler(message: types.Message):
 @dp.message_handler(IsAllowedChatFilter(), commands="batch_accept")
 async def batch_accept_handler(message: types.Message):
     """Обработчик команды /batch_accept для пакетного приема самокатов."""
+    logging.info(f"Получена команда /batch_accept от пользователя {message.from_user.id} в чате {message.chat.id}")
     args = message.get_args().split()
     if len(args) != 2:
         await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20` или `/batch_accept y 20`", parse_mode="Markdown")
@@ -290,6 +297,7 @@ async def today_stats_handler(message: types.Message):
     Отправляет статистику по принятым самокатам за текущую смену.
     Доступно только администраторам.
     """
+    logging.info(f"Получена команда /today_stats от пользователя {message.from_user.id} в чате {message.chat.id}")
     start_time, end_time, shift_name = get_shift_time_range()
     
     start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -350,6 +358,7 @@ async def export_excel_handler(message: types.Message):
     Экспортирует данные о принятых самокатах в Excel файл.
     Доступно только администраторам.
     """
+    logging.info(f"Получена команда {message.get_command()} от пользователя {message.from_user.id} в чате {message.chat.id}")
     is_today_shift = message.get_command() == '/export_today_excel'
     
     await message.answer(f"Формирую отчет...")
@@ -540,6 +549,7 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
     :param text_to_process: Текст для обработки (может быть подписью фото).
     :return: True, если что-то было принято, False в противном случае.
     """
+    logging.info(f"Вход в process_scooter_text для пользователя {message.from_user.id} с текстом: '{text_to_process}'")
     user = message.from_user
     now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -551,21 +561,25 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
     # Обработка пакетного приема через текст сообщения (например, "yandex 10")
     batch_matches = BATCH_QUANTITY_PATTERN.findall(text_to_process)
     if batch_matches:
+        logging.info(f"Найдены пакетные совпадения: {batch_matches}")
         for service_raw, quantity_str in batch_matches:
             service = SERVICE_ALIASES.get(service_raw.lower())
             try:
                 quantity = int(quantity_str)
-                if service and 0 < quantity <= 200: # Лимит на пакетный прием
+                if service and 0 < quantity <= 200: # Лимит на количество в пакетном приеме
                     for i in range(quantity):
-                        # Генерируем уникальный номер для каждой записи пакетного приема
+                        # Генерируем уникальный номер для каждой пакетной записи
                         placeholder_number = f"{service.upper()}_BATCH_{datetime.datetime.now().strftime('%H%M%S%f')}_{i+1}" 
                         records_to_insert.append((placeholder_number, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
                     accepted_summary[service] += quantity
             except (ValueError, TypeError):
-                # Если количество не число или другие ошибки, игнорируем этот пакет
+                logging.warning(f"Ошибка при парсинге пакетного приема: service_raw={service_raw}, quantity_str={quantity_str}")
                 continue
         # Удаляем обработанные пакетные команды из текста, чтобы не парсить их как отдельные номера самокатов
         text_for_numbers = BATCH_QUANTITY_PATTERN.sub('', text_to_process)
+    else:
+        logging.info("Пакетных совпадений не найдено.")
+
 
     # Обработка одиночных номеров самокатов
     patterns = {
@@ -578,10 +592,13 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
 
     for service, pattern in patterns.items():
         numbers = pattern.findall(text_for_numbers)
+        if numbers:
+            logging.info(f"Найдены номера для сервиса {service}: {numbers}")
         for num in numbers:
             clean_num = num.replace('-', '') if service == "Jet" else num.upper()
             
             if clean_num in processed_numbers:
+                logging.info(f"Номер '{clean_num}' уже обработан, пропускаем.")
                 continue # Пропускаем уже обработанные номера
             
             records_to_insert.append((clean_num, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
@@ -589,11 +606,13 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
             processed_numbers.add(clean_num)
 
     if not records_to_insert:
+        logging.info(f"records_to_insert пуст. Отправляется сообщение об ошибке распознавания.")
         # Если ничего не было найдено ни в пакетном, ни в одиночном режиме
         # Отправляем сообщение об ошибке только здесь, чтобы избежать спама
         await message.reply("Не удалось распознать номера самокатов или формат пакетного приема в вашем сообщении. Пожалуйста, убедитесь, что номера корректны или используйте формат `сервис количество`.")
         return False
 
+    logging.info(f"Найдено записей для вставки: {len(records_to_insert)}. Суммарно: {accepted_summary}")
     await db_write_batch(records_to_insert)
 
     response_parts = []
@@ -615,6 +634,7 @@ async def handle_text_messages(message: types.Message):
     """
     Обрабатывает текстовые сообщения пользователя, которые не являются командами.
     """
+    logging.info(f"handle_text_messages сработал для чата {message.chat.id}, пользователь {message.from_user.id}, текст: '{message.text}'")
     await process_scooter_text(message, message.text)
 
 # --- Основной обработчик фото с подписью ---
@@ -623,9 +643,11 @@ async def handle_photo_messages(message: types.Message):
     """
     Обрабатывает фотографии с подписями. Подпись передается для распознавания номеров.
     """
+    logging.info(f"handle_photo_messages сработал для чата {message.chat.id}, пользователь {message.from_user.id}, подпись: '{message.caption}'")
     if message.caption:
         await process_scooter_text(message, message.caption)
     else:
+        logging.info(f"Фото без подписи от {message.from_user.id} в чате {message.chat.id}")
         await message.reply("Пожалуйста, добавьте номер самоката в подпись к фотографии.")
 
 # --- Обработчик для всех остальных типов контента (catch-all) ---
@@ -636,20 +658,25 @@ async def handle_unsupported_content(message: types.Message):
     Обрабатывает любые сообщения, которые не были перехвачены другими, более специфическими обработчиками.
     Это помогает избежать спама ответами на неподдерживаемый контент.
     """
+    logging.info(f"handle_unsupported_content сработал для чата {message.chat.id}, пользователь {message.from_user.id}, тип: {message.content_type}")
+
     # Если сообщение является командой (даже если неизвестной), просто игнорируем его,
     # чтобы не отвечать на каждую неправильно набранную команду.
     if message.text and message.text.startswith('/'):
+        logging.info(f"Сообщение - команда, игнорируем в handle_unsupported_content: {message.text}")
         return
 
-    # Если это не фото и не текст, и это не команда, значит это действительно неподдерживаемый контент (стикер, видео, голосовое и т.д.)
+    # Если это не фото и не текст (и не команда), значит это действительно неподдерживаемый контент (стикер, видео, голосовое и т.д.)
     if not (message.photo or message.text): 
         await message.reply("Извините, я могу обрабатывать только текстовые сообщения и фотографии (с подписями). "
                             "Видео, документы и другие файлы я не поддерживаю.")
+        logging.info(f"Отправлен ответ о неподдерживаемом типе контента: {message.content_type}")
         return
     
     # Если это был просто текст, который не распознался (и не был командой),
     # мы уже ответили на него в process_scooter_text (если records_to_insert был пуст).
     # Здесь мы просто ничего не делаем, чтобы избежать дублирования ответов или спама на "мусорный" текст.
+    logging.info(f"Сообщение было текстом/фото с подписью, но не распознано в process_scooter_text. Тип: {message.content_type}, текст: '{message.text or message.caption}'")
     pass
 
 
