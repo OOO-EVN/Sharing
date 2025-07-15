@@ -9,21 +9,25 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
 from typing import List, Tuple
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+# Изменения для aiogram 2.x
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.utils import executor
 from aiogram.dispatcher.filters import BoundFilter
 from aiogram.utils.exceptions import MessageIsTooLong
-from aiogram.contrib.middleware.throttling import ThrottlingMiddleware
+
 from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 from openpyxl.utils import get_column_letter
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 load_dotenv()
+
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден в .env файле. Пожалуйста, добавьте его.")
@@ -39,11 +43,12 @@ except ValueError:
     REPORT_CHAT_IDS = set()
 
 DB_NAME = 'scooters.db'
-TIMEZONE = pytz.timezone('Asia/Almaty')
+TIMEZONE = pytz.timezone('Asia/Almaty') # Ваша таймзона UTC+5
 
 YANDEX_SCOOTER_PATTERN = re.compile(r'\b(\d{8})\b')
 WOOSH_SCOOTER_PATTERN = re.compile(r'\b([A-ZА-Я]{2}\d{4})\b', re.IGNORECASE)
 JET_SCOOTER_PATTERN = re.compile(r'\b(\d{3}-?\d{3})\b')
+
 BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|yandex|вуш|джет|яндекс|w|j|y)\s+(\d+)\b', re.IGNORECASE)
 SERVICE_ALIASES = {
     "yandex": "Яндекс", "яндекс": "Яндекс", "y": "Яндекс",
@@ -55,35 +60,24 @@ SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"}
 bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
-dp.middleware.setup(ThrottlingMiddleware(rate_limit=1, rate_limit_timeout=5))
 
 db_executor = None
 scheduler = None
-user_errors = defaultdict(int)  # Track consecutive invalid messages per user
 
 class IsAdminFilter(BoundFilter):
-    """Фильтр для проверки, является ли отправитель сообщения администратором."""
     async def check(self, message: types.Message) -> bool:
         return message.from_user.id in ADMIN_IDS
 
 class IsAllowedChatFilter(BoundFilter):
-    """Фильтр для проверки, разрешен ли данный чат для работы бота."""
     async def check(self, message: types.Message) -> bool:
         if message.chat.type == 'private' and message.from_user.id in ADMIN_IDS:
             return True
         if message.chat.type in ['group', 'supergroup'] and message.chat.id in ALLOWED_CHAT_IDS:
             return True
-        logging.warning(f"Сообщение от {message.from_user.id} в чате {message.chat.id} было заблокировано фильтром IsAllowedChatFilter.")
+        logging.warning(f"Сообщение от {message.from_user.id} в чате {message.chat.id} было заблокировано фильтром.")
         return False
 
 def run_db_query(query: str, params: tuple = (), fetch: str = None):
-    """
-    Выполняет SQL-запрос к базе данных.
-    :param query: SQL-запрос.
-    :param params: Параметры запроса.
-    :param fetch: 'one' для получения одной записи, 'all' для всех записей, None для без возврата (INSERT/UPDATE/DELETE).
-    :return: Результат запроса или None в случае ошибки.
-    """
     conn = None
     try:
         conn = sqlite3.connect(DB_NAME, timeout=10)
@@ -104,7 +98,6 @@ def run_db_query(query: str, params: tuple = (), fetch: str = None):
             conn.close()
 
 def init_db():
-    """Инициализирует (создает, если не существует) таблицы базы данных."""
     run_db_query('''
         CREATE TABLE IF NOT EXISTS accepted_scooters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,10 +115,6 @@ def init_db():
     logging.info("База данных успешно инициализирована.")
 
 def insert_batch_records(records_data: List[Tuple]):
-    """
-    Выполняет пакетную вставку записей в таблицу accepted_scooters.
-    :param records_data: Список кортежей с данными для вставки.
-    """
     conn = None
     try:
         conn = sqlite3.connect(DB_NAME, timeout=10)
@@ -143,20 +132,17 @@ def insert_batch_records(records_data: List[Tuple]):
             conn.close()
 
 async def db_write_batch(records_data: List[Tuple]):
-    """Асинхронно записывает пакет данных в БД."""
     loop = asyncio.get_running_loop()
     global db_executor
     await loop.run_in_executor(db_executor, insert_batch_records, records_data)
 
 async def db_fetch_all(query: str, params: tuple = ()):
-    """Асинхронно выполняет запрос на выборку всех данных из БД."""
     loop = asyncio.get_running_loop()
     global db_executor
     return await loop.run_in_executor(db_executor, run_db_query, query, params, 'all')
 
 @dp.message_handler(IsAllowedChatFilter(), commands="start")
 async def command_start_handler(message: types.Message):
-    """Обработчик команды /start."""
     allowed_chats_info = ', '.join(map(str, ALLOWED_CHAT_IDS)) if ALLOWED_CHAT_IDS else "не указаны"
     response = (
         f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
@@ -167,32 +153,16 @@ async def command_start_handler(message: types.Message):
     )
     await message.answer(response, parse_mode="Markdown")
 
-@dp.message_handler(IsAllowedChatFilter(), commands="help")
-async def command_help_handler(message: types.Message):
-    await message.answer(
-        "Я бот для приёма самокатов. Используйте:\n"
-        "- Номера самокатов:\n"
-        "  - Яндекс: 8 цифр (например, `12345678`)\n"
-        "  - Whoosh: 2 буквы + 4 цифры (например, `AB1234`)\n"
-        "  - Jet: 6 цифр или 3-3 с дефисом (например, `123456` или `123-456`)\n"
-        "- Пакетный прием: `сервис количество` (например, `Yandex 10`, `w 5`, `Jet 3`)\n"
-        "- Команды:\n"
-        "  - /start: Информация о боте\n"
-        "  - /batch_accept <сервис> <кол-во>: Пакетный прием\n"
-        "  - /today_stats: Статистика за смену (админы)\n"
-        "  - /export_today_excel: Экспорт за смену (админы)\n"
-        "  - /export_all_excel: Экспорт за все время (админы)"
-    )
-
 @dp.message_handler(IsAllowedChatFilter(), commands="batch_accept")
 async def batch_accept_handler(message: types.Message):
-    """Обработчик команды /batch_accept для пакетного приема самокатов."""
     args = message.get_args().split()
     if len(args) != 2:
         await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20` или `/batch_accept y 20`", parse_mode="Markdown")
         return
+
     service_raw, quantity_str = args
     service = SERVICE_ALIASES.get(service_raw.lower())
+
     if not service:
         await message.reply("Неизвестный сервис. Доступны: `Yandex` (`y`), `Whoosh` (`w`), `Jet` (`j`).", parse_mode="Markdown")
         return
@@ -203,28 +173,26 @@ async def batch_accept_handler(message: types.Message):
     except ValueError:
         await message.reply("Количество должно быть числом от 1 до 200.")
         return
+
     user = message.from_user
     now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+
     records_to_insert = [
         (
-            f"{service.upper()}_BATCH_{datetime.datetime.now().strftime('%H%M%S%f')}_{i+1}",
+            f"{service.upper()}_BATCH_{i+1}",
             service, user.id, user.username, user.full_name, now_localized_str, message.chat.id
         ) for i in range(quantity)
     ]
+
     await db_write_batch(records_to_insert)
+
     user_mention = types.User.get_mention(user)
     await message.reply(f"{user_mention}, принято {quantity} самокатов сервиса <b>{service}</b>.")
-    global user_errors
-    user_errors[message.from_user.id] = 0  # Reset error count on successful input
 
 def get_shift_time_range_for_report(shift_type: str):
-    """
-    Определяет время начала и конца смены для формирования отчета.
-    :param shift_type: Тип смены ('morning' или 'evening').
-    :return: Кортеж (start_time, end_time, shift_name).
-    """
     now = datetime.datetime.now(TIMEZONE)
     today = now.date()
+    
     if shift_type == 'morning':
         start_time = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(7, 0, 0)))
         end_time = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
@@ -232,25 +200,25 @@ def get_shift_time_range_for_report(shift_type: str):
     elif shift_type == 'evening':
         evening_start_actual = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
         evening_end_extended = TIMEZONE.localize(datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time(4, 0, 0)))
+        
         start_time = evening_start_actual
         end_time = evening_end_extended
         shift_name = "вечернюю смену (с учетом ночных часов)"
     else:
         return None, None, None
+        
     return start_time, end_time, shift_name
 
+
 def get_shift_time_range():
-    """
-    Определяет текущую смену и ее временной диапазон относительно текущего времени.
-    Используется для команды /today_stats.
-    :return: Кортеж (start_time, end_time, shift_name).
-    """
     now = datetime.datetime.now(TIMEZONE)
     today = now.date()
+
     morning_shift_start = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(7, 0, 0)))
     morning_shift_end = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
     evening_shift_start = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
     evening_shift_end = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(23, 0, 0)))
+
     if morning_shift_start <= now < morning_shift_end:
         return morning_shift_start, morning_shift_end, "утреннюю смену"
     elif evening_shift_start <= now < evening_shift_end:
@@ -258,6 +226,7 @@ def get_shift_time_range():
     else:
         prev_day = today - datetime.timedelta(days=1)
         night_cutoff_current_day = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(4, 0, 0)))
+
         if TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(0,0,0))) <= now < night_cutoff_current_day:
             prev_evening_shift_start = TIMEZONE.localize(datetime.datetime.combine(prev_day, datetime.time(15, 0, 0)))
             return prev_evening_shift_start, night_cutoff_current_day, "вечернюю смену (с учетом ночных часов)"
@@ -266,60 +235,69 @@ def get_shift_time_range():
                 return evening_shift_start, evening_shift_end, "вечернюю смену"
             return morning_shift_start, morning_shift_end, "утреннюю смену (еще не началась)"
 
+
 @dp.message_handler(IsAdminFilter(), commands="today_stats")
 async def today_stats_handler(message: types.Message):
-    """
-    Отправляет статистику по принятым самокатам за текущую смену.
-    Доступно только администраторам.
-    """
     start_time, end_time, shift_name = get_shift_time_range()
+    
     start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
+
     query = "SELECT service, accepted_by_user_id, accepted_by_username, accepted_by_fullname FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
     records = await db_fetch_all(query, (start_str, end_str))
+
     if not records:
         await message.answer(f"За {shift_name} пока ничего не принято.")
         return
+
     user_stats = defaultdict(lambda: defaultdict(int))
     user_info = {}
     service_totals = defaultdict(int)
+
     for service, user_id, username, fullname in records:
         user_stats[user_id][service] += 1
         service_totals[service] += 1
         if user_id not in user_info:
             user_info[user_id] = f"@{username}" if username else fullname
+
     response_parts = [f"<b>Статистика за {shift_name} ({start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}):</b>"]
     total_all_users = 0
+
     for user_id, services in user_stats.items():
         user_total = sum(services.values())
         total_all_users += user_total
         response_parts.append(f"\n<b>{user_info[user_id]}</b> - всего: {user_total} шт.")
         for service, count in sorted(services.items()):
             response_parts.append(f"  - {service}: {count} шт.")
+
     response_parts.append("\n<b>Итог по сервисам:</b>")
     for service, count in sorted(service_totals.items()):
         response_parts.append(f"<b>{service}</b>: {count} шт.")
+
     response_parts.append(f"\n<b>Общий итог за {shift_name}: {total_all_users} шт.</b>")
+    
     MESSAGE_LIMIT = 4000
     current_message_buffer = []
+    
     for part in response_parts:
         if len('\n'.join(current_message_buffer)) + len(part) + (1 if current_message_buffer else 0) > MESSAGE_LIMIT:
             if current_message_buffer:
                 await message.answer("\n".join(current_message_buffer))
                 current_message_buffer = []
         current_message_buffer.append(part)
+    
     if current_message_buffer:
         await message.answer("\n".join(current_message_buffer))
 
+
 @dp.message_handler(IsAdminFilter(), commands=["export_today_excel", "export_all_excel"])
 async def export_excel_handler(message: types.Message):
-    """
-    Экспортирует данные о принятых самокатах в Excel файл.
-    Доступно только администраторам.
-    """
     is_today_shift = message.get_command() == '/export_today_excel'
+    
     await message.answer(f"Формирую отчет...")
+
     query = "SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters"
+    
     if is_today_shift:
         start_time, end_time, shift_name = get_shift_time_range()
         start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -331,14 +309,17 @@ async def export_excel_handler(message: types.Message):
         query += " ORDER BY timestamp DESC"
         records = await db_fetch_all(query)
         date_filter_text = " за все время"
+
     if not records:
         await message.answer(f"Нет данных для экспорта{date_filter_text}.")
         logging.info(f"Нет данных для экспорта отчета{date_filter_text}.")
         return
+
     try:
         excel_file = create_excel_report(records)
         report_type = "shift" if is_today_shift else "full"
         filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
+        
         logging.info(f"Попытка отправить Excel файл: {filename}, размер: {excel_file.getbuffer().nbytes} байт.")
         await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption=f"Ваш отчет{date_filter_text} готов.")
     except Exception as e:
@@ -346,77 +327,159 @@ async def export_excel_handler(message: types.Message):
         await message.answer("Произошла ошибка при отправке отчета. Пожалуйста, свяжитесь с администратором.")
 
 def create_excel_report(records: List[Tuple]) -> BytesIO:
-    """
-    Создает Excel отчет с отдельными листами для каждого пользователя.
-    :param records: Список кортежей с данными из БД.
-    :return: Объект BytesIO, содержащий Excel файл.
-    """
     wb = Workbook()
-    if 'Sheet' in wb.sheetnames:
-        del wb['Sheet']
-    elif 'Sheet1' in wb.sheetnames:
-        del wb['Sheet1']
-    if wb.active:
-        wb.remove(wb.active)
+    
+    # --- ЛИСТ "ВСЕ ДАННЫЕ" ---
+    # Этот лист остается для просмотра всех записей подряд
+    ws_all_data = wb.active
+    ws_all_data.title = "Все данные"
+
+    headers_all_data = ["ID", "Номер Самоката", "Сервис", "ID Пользователя", "Ник", "Полное имя", "Время Принятия", "ID Чата"]
+    ws_all_data.append(headers_all_data)
     header_font = Font(bold=True)
-    user_records = defaultdict(list)
-    user_info_for_sheets = {}
+    for cell in ws_all_data[1]:
+        cell.font = header_font
+
+    for row in records:
+        ws_all_data.append(row)
+
+    # Автонастройка ширины столбцов на листе "Все данные"
+    for col_idx, col in enumerate(ws_all_data.columns):
+        max_length = 0
+        column_letter = get_column_letter(col_idx + 1)
+        for cell in col:
+            try:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            except:
+                pass
+        adjusted_width = (max_length + 2) * 1.2
+        ws_all_data.column_dimensions[column_letter].width = adjusted_width
+
+    # --- ЛИСТ "ИТОГИ" (сводка по всем пользователям) ---
+    # Этот лист будет содержать общую сводку по всем пользователям
+    ws_totals = wb.create_sheet("Итоги")
+    totals_headers = ["Пользователь", "Всего Самокатов"]
+    ws_totals.append(totals_headers)
+    for cell in ws_totals[1]:
+        cell.font = header_font
+
+    user_total_counts_summary = defaultdict(int)
+    user_info_map_summary = {} # Для отображаемых имен пользователей
+
     for record in records:
         user_id = record[3]
         username = record[4]
         fullname = record[5]
-        display_name = fullname if fullname else (f"@{username}" if username else f"ID_{user_id}")
+        display_name = fullname if fullname else (f"@{username}" if username else f"ID: {user_id}")
+        user_total_counts_summary[user_id] += 1
+        user_info_map_summary[user_id] = display_name
+
+    sorted_user_ids_summary = sorted(user_total_counts_summary.keys(), key=lambda user_id: user_info_map_summary[user_id].lower())
+
+    for user_id in sorted_user_ids_summary:
+        user_display_name = user_info_map_summary[user_id]
+        total_count = user_total_counts_summary[user_id]
+        ws_totals.append([user_display_name, total_count])
+        # Выделяем жирным
+        ws_totals.cell(row=ws_totals.max_row, column=1).font = Font(bold=True)
+        ws_totals.cell(row=ws_totals.max_row, column=2).font = Font(bold=True)
+
+    # Автонастройка ширины столбцов на листе "Итоги"
+    for col_idx, col in enumerate(ws_totals.columns):
+        max_length = 0
+        column_letter = get_column_letter(col_idx + 1)
+        for cell in col:
+            try:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            except:
+                pass
+        adjusted_width = (max_length + 2) * 1.2
+        ws_totals.column_dimensions[column_letter].width = adjusted_width
+
+    # --- ОТДЕЛЬНЫЕ ЛИСТЫ ДЛЯ КАЖДОГО ПОЛЬЗОВАТЕЛЯ ---
+    user_records = defaultdict(list)
+    user_info_for_sheets = {}
+
+    for record in records:
+        user_id = record[3]
+        username = record[4]
+        fullname = record[5]
+        display_name = fullname if fullname else (f"@{username}" if username else f"ID: {user_id}")
+        
         user_records[user_id].append(record)
         if user_id not in user_info_for_sheets:
             user_info_for_sheets[user_id] = display_name
+
     sorted_user_ids = sorted(user_records.keys(), key=lambda user_id: user_info_for_sheets[user_id].lower())
-    user_sheet_headers = ["ID записи", "Номер Самоката", "Сервис", "Время Принятия", "ID Чата"]
-    if not sorted_user_ids:
-        ws_empty = wb.create_sheet(title="Нет данных", index=0)
-        ws_empty.append(["Нет записей для создания отчетов по пользователям."])
+
+    user_sheet_headers = ["ID", "Номер Самоката", "Сервис", "Время Принятия", "ID Чата"] # Заголовки для листов пользователей
+
     for user_id in sorted_user_ids:
         user_display_name = user_info_for_sheets[user_id]
+        # Telegram username может быть длиной до 32 символов.
+        # Имя листа в Excel не может превышать 31 символ и не может содержать некоторые спец. символы.
+        # Очищаем имя для листа
+        sheet_name_raw = f"{user_display_name[:25].replace('@', '')}" # Обрезаем и убираем @
+        # Удаляем недопустимые символы для имени листа
         invalid_chars = re.compile(r'[\\/:*?"<>|]')
-        sheet_name = invalid_chars.sub('', user_display_name)
-        if len(sheet_name) > 31:
-            sheet_name = sheet_name[:31]
-        if not sheet_name.strip() or len(sheet_name.strip()) < 3:
-            sheet_name = f"ID_{user_id}"
+        sheet_name = invalid_chars.sub('', sheet_name_raw)
+        
+        # Добавляем префикс ID, если после очистки имя пустое или слишком короткое,
+        # или если оно совпадает с уже существующим листом (крайне маловероятно после обработки)
+        if not sheet_name or len(sheet_name) < 3: # Если имя слишком короткое после очистки
+             sheet_name = f"ID{user_id}"
+        
+        # Убедимся, что имя листа уникально (если вдруг совпадения по коротким именам)
         original_sheet_name = sheet_name
         counter = 1
         while sheet_name in wb.sheetnames:
-            suffix = f"_{counter}"
-            sheet_name = f"{original_sheet_name[:31 - len(suffix)]}{suffix}"
+            sheet_name = f"{original_sheet_name[:28]}{counter}" # Добавляем счетчик, чтобы не превысить 31 символ
             counter += 1
+
         ws_user = wb.create_sheet(title=sheet_name)
+        
         ws_user.append(user_sheet_headers)
         for cell in ws_user[1]:
             cell.font = header_font
+
         current_user_total = 0
-        user_service_breakdown = defaultdict(int)
+        user_service_breakdown = defaultdict(int) # Для статистики по сервисам на листе пользователя
+
+        # Записи для текущего пользователя
         for record in user_records[user_id]:
+            # Отфильтровываем user_id, username, fullname, chat_id (дублируются в названии листа)
+            # Структура record: ID, Номер Самоката, Сервис, ID Пользователя, Ник, Полное имя, Время Принятия, ID Чата
+            # Новая строка: ID, Номер Самоката, Сервис, Время Принятия, ID Чата
             row_to_add = [record[0], record[1], record[2], record[6], record[7]]
             ws_user.append(row_to_add)
             current_user_total += 1
-            user_service_breakdown[record[2]] += 1
-        ws_user.append([])
+            user_service_breakdown[record[2]] += 1 # Считаем по сервисам для этого пользователя
+
+        # Добавляем итоговую информацию в конце листа пользователя
+        ws_user.append([]) # Пустая строка для разделения
+        
         ws_user.append(["Статистика по сервисам:"])
         ws_user.cell(row=ws_user.max_row, column=1).font = Font(bold=True)
-        ws_user.merge_cells(start_row=ws_user.max_row, start_column=1, end_row=ws_user.max_row, end_column=len(user_sheet_headers))
-        ws_user.cell(row=ws_user.max_row, column=1).alignment = Alignment(horizontal='center')
+        ws_user.merge_cells(start_row=ws_user.max_row, start_column=1, end_row=ws_user.max_row, end_column=2)
+
         for service, count in sorted(user_service_breakdown.items()):
             ws_user.append([service, count])
-        ws_user.append([])
+
+        ws_user.append([]) # Еще одна пустая строка
+        
         ws_user.append(["Всего принято:", current_user_total])
-        ws_user.merge_cells(start_row=ws_user.max_row, start_column=1, end_row=ws_user.max_row, end_column=len(user_sheet_headers) - 1)
         ws_user.cell(row=ws_user.max_row, column=1).font = Font(bold=True)
+        ws_user.cell(row=ws_user.max_row, column=2).font = Font(bold=True)
         ws_user.cell(row=ws_user.max_row, column=1).alignment = Alignment(horizontal='right')
-        ws_user.cell(row=ws_user.max_row, column=len(user_sheet_headers)).font = Font(bold=True)
-        ws_user.cell(row=ws_user.max_row, column=len(user_sheet_headers)).alignment = Alignment(horizontal='center')
-        for col_idx in range(len(user_sheet_headers)):
+        ws_user.cell(row=ws_user.max_row, column=2).alignment = Alignment(horizontal='center')
+
+        # Автонастройка ширины столбцов на листе пользователя
+        for col_idx, col in enumerate(ws_user.columns):
             max_length = 0
             column_letter = get_column_letter(col_idx + 1)
-            for cell in ws_user[column_letter]:
+            for cell in col:
                 try:
                     if cell.value:
                         length = len(str(cell.value))
@@ -426,151 +489,109 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
                     pass
             adjusted_width = (max_length + 2) * 1.2
             ws_user.column_dimensions[column_letter].width = adjusted_width
+            
     buffer = BytesIO()
     wb.save(buffer)
     buffer.seek(0)
     return buffer
 
 async def process_scooter_text(message: types.Message, text_to_process: str):
-    """
-    Обрабатывает текстовые сообщения на предмет номеров самокатов или пакетного приема.
-    :param message: Объект сообщения Telegram.
-    :param text_to_process: Текст для обработки (может быть подписью фото).
-    :return: True, если что-то было принято, False в противном случае.
-    """
-    global user_errors
-    text_to_process = ' '.join(text_to_process.strip().split())  # Normalize spaces
-    if not text_to_process.strip():
-        user_errors[message.from_user.id] += 1
-        if user_errors[message.from_user.id] % 2 == 0:  # Reply only on every second invalid message
-            await message.reply("Сообщение пустое. Пожалуйста, отправьте номер самоката или `сервис количество`. Используйте /help для справки.")
-        return False
     user = message.from_user
     now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+
     records_to_insert = []
     accepted_summary = defaultdict(int)
+    
     text_for_numbers = text_to_process
+
     batch_matches = BATCH_QUANTITY_PATTERN.findall(text_to_process)
     if batch_matches:
         for service_raw, quantity_str in batch_matches:
             service = SERVICE_ALIASES.get(service_raw.lower())
-            if not service:
-                user_errors[message.from_user.id] += 1
-                if user_errors[message.from_user.id] % 2 == 0:
-                    await message.reply(f"Неизвестный сервис '{service_raw}'. Доступны: `Yandex (y)`, `Whoosh (w)`, `Jet (j)`. Используйте /help для справки.")
-                continue
             try:
                 quantity = int(quantity_str)
-                if 0 < quantity <= 200:
+                if service and 0 < quantity <= 200:
                     for i in range(quantity):
-                        placeholder_number = f"{service.upper()}_BATCH_{datetime.datetime.now().strftime('%H%M%S%f')}_{i+1}"
+                        placeholder_number = f"{service.upper()}_BATCH_{datetime.datetime.now().strftime('%H%M%S%f')}_{i+1}" 
                         records_to_insert.append((placeholder_number, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
                     accepted_summary[service] += quantity
             except (ValueError, TypeError):
-                user_errors[message.from_user.id] += 1
-                if user_errors[message.from_user.id] % 2 == 0:
-                    await message.reply("Количество должно быть числом от 1 до 200. Используйте /help для справки.")
                 continue
         text_for_numbers = BATCH_QUANTITY_PATTERN.sub('', text_to_process)
+
     patterns = {
         "Яндекс": YANDEX_SCOOTER_PATTERN,
         "Whoosh": WOOSH_SCOOTER_PATTERN,
         "Jet": JET_SCOOTER_PATTERN
     }
+    
     processed_numbers = set()
+
     for service, pattern in patterns.items():
         numbers = pattern.findall(text_for_numbers)
         for num in numbers:
             clean_num = num.replace('-', '') if service == "Jet" else num.upper()
+            
             if clean_num in processed_numbers:
                 continue
+            
             records_to_insert.append((clean_num, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
             accepted_summary[service] += 1
             processed_numbers.add(clean_num)
+
     if not records_to_insert:
-        user_errors[message.from_user.id] += 1
-        if user_errors[message.from_user.id] % 2 == 0:
-            await message.reply(
-                "Не удалось распознать номера самокатов или формат пакетного приема. "
-                "Пожалуйста, используйте:\n"
-                "- Для Яндекс: 8 цифр (например, `12345678`)\n"
-                "- Для Whoosh: 2 буквы + 4 цифры (например, `AB1234`)\n"
-                "- Для Jet: 6 цифр или 3-3 с дефисом (например, `123456` или `123-456`)\n"
-                "- Для пакетного приема: `сервис количество` (например, `Yandex 10`, `w 5`, `Jet 3`)\n"
-                "Используйте /help для справки."
-            )
         return False
+
     await db_write_batch(records_to_insert)
+
     response_parts = []
     user_mention = types.User.get_mention(user)
     total_accepted = sum(accepted_summary.values())
     response_parts.append(f"{user_mention}, принято {total_accepted} шт.:")
+
     for service, count in sorted(accepted_summary.items()):
         if count > 0:
             response_parts.append(f"  - <b>{service}</b>: {count} шт.")
+
     await message.reply("\n".join(response_parts))
-    user_errors[message.from_user.id] = 0  # Reset error count on successful input
     return True
 
-@dp.message_handler(IsAllowedChatFilter(), regexp=r'import\s+(asyncio|re|os|sqlite3)')
-async def handle_code_messages(message: types.Message):
-    global user_errors
-    user_errors[message.from_user.id] += 1
-    if user_errors[message.from_user.id] % 2 == 0:
-        await message.reply("Ошибка: отправка кода не поддерживается. Используйте номера самокатов или формат `сервис количество`. Используйте /help для справки.")
-
-@dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.TEXT, regexp=r'^(?!/).*$')
+@dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.TEXT)
 async def handle_text_messages(message: types.Message):
-    """
-    Обрабатывает текстовые сообщения пользователя, которые не являются командами.
-    """
+    if message.text.startswith('/'):
+        return
     await process_scooter_text(message, message.text)
 
 @dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.PHOTO)
 async def handle_photo_messages(message: types.Message):
-    """
-    Обрабатывает фотографии с подписями. Подпись передается для распознавания номеров.
-    """
-    global user_errors
     if message.caption:
         await process_scooter_text(message, message.caption)
-    else:
-        user_errors[message.from_user.id] += 1
-        if user_errors[message.from_user.id] % 2 == 0:
-            await message.reply("Пожалуйста, добавьте номер самоката в подпись к фотографии. Используйте /help для справки.")
 
 @dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.ANY)
 async def handle_unsupported_content(message: types.Message):
-    """
-    Обрабатывает любые сообщения, которые не были перехвачены другими, более специфическими обработчиками.
-    Это помогает избежать спама ответами на неподдерживаемый контент.
-    """
-    global user_errors
     if message.text and message.text.startswith('/'):
         return
-    if not (message.photo or message.text):
-        user_errors[message.from_user.id] += 1
-        if user_errors[message.from_user.id] % 2 == 0:
-            await message.reply("Извините, я могу обрабатывать только текстовые сообщения и фотографии (с подписями). Используйте /help для справки.")
-        return
+    if not (message.photo or (message.text and not message.text.startswith('/'))):
+        await message.reply("Извините, я могу обрабатывать только текстовые сообщения и фотографии (с подписями). "
+                            "Видео, документы и другие файлы я не поддерживаю.")
 
 async def send_scheduled_report(shift_type: str):
-    """
-    Функция для отправки автоматического отчета по расписанию.
-    Отправляет Excel файл с данными за указанную смену в REPORT_CHAT_IDS.
-    :param shift_type: Тип смены ('morning' или 'evening').
-    """
     logging.info(f"Запуск отправки автоматического отчета для {shift_type} смены.")
+    
     start_time, end_time, shift_name = get_shift_time_range_for_report(shift_type)
+    
     if not start_time or not end_time:
-        logging.error(f"Не удалось определить временной диапазон для отчета '{shift_type}' смены. Проверьте TIMEZONE или логику get_shift_time_range_for_report.")
+        logging.error(f"Не удалось определить временной диапазон для отчета '{shift_type}' смены.")
         return
+
     start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
+
     query = "SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
     records = await db_fetch_all(query, (start_str, end_str))
+
     if not records:
-        message_text = f"Отчет за {shift_name} ({start_time.strftime('%d.%m %H:%M')} - {end_time.strftime('%d.%m %H:%M')}): За смену ничего не принято."
+        message_text = f"Отчет за {shift_name} ({start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}): За смену ничего не принято."
         for chat_id in REPORT_CHAT_IDS:
             try:
                 await bot.send_message(chat_id, message_text)
@@ -578,18 +599,21 @@ async def send_scheduled_report(shift_type: str):
             except Exception as e:
                 logging.error(f"Ошибка отправки уведомления в чат {chat_id}: {e}")
         return
+
     try:
         excel_file = create_excel_report(records)
         report_type_filename = "morning_shift" if shift_type == 'morning' else "evening_shift"
         filename = f"report_{report_type_filename}_{start_time.strftime('%Y%m%d')}.xlsx"
         caption = f"Ежедневный отчет за {shift_name} ({start_time.strftime('%d.%m %H:%M')} - {end_time.strftime('%d.%m %H:%M')})"
+        
         for chat_id in REPORT_CHAT_IDS:
             try:
-                excel_file.seek(0)
+                excel_file.seek(0) 
                 await bot.send_document(chat_id, types.InputFile(excel_file, filename=filename), caption=caption)
                 logging.info(f"Отправлен Excel отчет за {shift_name} в чат {chat_id}.")
             except Exception as e:
                 logging.error(f"Ошибка отправки Excel файла в чат {chat_id}: {e}", exc_info=True)
+
     except Exception as e:
         logging.error(f"Произошла общая ошибка при формировании или отправке Excel отчета: {e}", exc_info=True)
         for admin_id in ADMIN_IDS:
@@ -598,25 +622,28 @@ async def send_scheduled_report(shift_type: str):
             except Exception as err:
                 logging.error(f"Не удалось отправить уведомление об ошибке администратору {admin_id}: {err}")
 
+
 async def on_startup(dispatcher: Dispatcher):
-    """Действия при запуске бота: инициализация БД, планировщика, установка команд."""
-    await dispatcher.bot.delete_webhook()
-    logging.info("Webhook disabled, running in polling mode.")
     global db_executor
     db_executor = ThreadPoolExecutor(max_workers=5)
+    
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(db_executor, init_db)
+    
     global scheduler
     scheduler = AsyncIOScheduler(timezone=str(TIMEZONE))
+    
     scheduler.add_job(send_scheduled_report, 'cron', hour=15, minute=0, timezone=str(TIMEZONE), args=['morning'])
     logging.info("Задача для отправки утреннего отчета (в 15:00) запланирована.")
-    scheduler.add_job(send_scheduled_report, 'cron', hour=4, minute=0, timezone=str(TIMEZONE), args=['evening'])
-    logging.info("Задача для отправки вечернего отчета (в 04:00) запланирована.")
+    
+    scheduler.add_job(send_scheduled_report, 'cron', hour=23, minute=0, timezone=str(TIMEZONE), args=['evening'])
+    logging.info("Задача для отправки вечернего отчета (в 23:00) запланирована.")
+    
     scheduler.start()
     logging.info("APScheduler запущен.")
+    
     admin_commands = [
         types.BotCommand(command="start", description="Начало работы"),
-        types.BotCommand(command="help", description="Справка по командам и форматам"),
         types.BotCommand(command="today_stats", description="Статистика за текущую смену"),
         types.BotCommand(command="export_today_excel", description="Экспорт Excel за текущую смену"),
         types.BotCommand(command="export_all_excel", description="Экспорт Excel за все время"),
@@ -625,15 +652,17 @@ async def on_startup(dispatcher: Dispatcher):
     await dispatcher.bot.set_my_commands(admin_commands)
     logging.info("Бот запущен и команды установлены.")
 
+
 async def on_shutdown(dispatcher: Dispatcher):
-    """Действия при остановке бота: остановка пула потоков БД и планировщика."""
     global db_executor
     if db_executor:
         db_executor.shutdown(wait=True)
+    
     global scheduler
     if scheduler:
         scheduler.shutdown()
         logging.info("APScheduler остановлен.")
+        
     logging.info("Пул потоков БД остановлен.")
     logging.info("Бот остановлен.")
 
