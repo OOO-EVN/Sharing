@@ -328,74 +328,14 @@ async def export_excel_handler(message: types.Message):
 def create_excel_report(records: List[Tuple]) -> BytesIO:
     wb = Workbook()
     
-    # --- ЛИСТ "ВСЕ ДАННЫЕ" ---
-    # Этот лист остается для просмотра всех записей подряд
-    ws_all_data = wb.active
-    ws_all_data.title = "Все данные"
+    # Удаляем лист по умолчанию, который создается при инициализации Workbook.
+    # Это гарантирует, что не будет пустого листа 'Sheet' или 'Sheet1'.
+    if 'Sheet' in wb.sheetnames:
+        wb.remove(wb['Sheet'])
+    # Если default-лист был переименован до удаления, то его нужно удалить по новому имени
+    # В данном случае, мы ничего не переименовывали перед удалением.
 
-    headers_all_data = ["ID", "Номер Самоката", "Сервис", "ID Пользователя", "Ник", "Полное имя", "Время Принятия", "ID Чата"]
-    ws_all_data.append(headers_all_data)
     header_font = Font(bold=True)
-    for cell in ws_all_data[1]:
-        cell.font = header_font
-
-    for row in records:
-        ws_all_data.append(row)
-
-    # Автонастройка ширины столбцов на листе "Все данные"
-    for col_idx, col in enumerate(ws_all_data.columns):
-        max_length = 0
-        column_letter = get_column_letter(col_idx + 1)
-        for cell in col:
-            try:
-                if cell.value:
-                    max_length = max(max_length, len(str(cell.value)))
-            except:
-                pass
-        adjusted_width = (max_length + 2) * 1.2
-        ws_all_data.column_dimensions[column_letter].width = adjusted_width
-
-    # --- ЛИСТ "ИТОГИ" (сводка по всем пользователям) ---
-    # Этот лист будет содержать общую сводку по всем пользователям
-    ws_totals = wb.create_sheet("Итоги")
-    totals_headers = ["Пользователь", "Всего Самокатов"]
-    ws_totals.append(totals_headers)
-    for cell in ws_totals[1]:
-        cell.font = header_font
-
-    user_total_counts_summary = defaultdict(int)
-    user_info_map_summary = {} # Для отображаемых имен пользователей
-
-    for record in records:
-        user_id = record[3]
-        username = record[4]
-        fullname = record[5]
-        display_name = fullname if fullname else (f"@{username}" if username else f"ID: {user_id}")
-        user_total_counts_summary[user_id] += 1
-        user_info_map_summary[user_id] = display_name
-
-    sorted_user_ids_summary = sorted(user_total_counts_summary.keys(), key=lambda user_id: user_info_map_summary[user_id].lower())
-
-    for user_id in sorted_user_ids_summary:
-        user_display_name = user_info_map_summary[user_id]
-        total_count = user_total_counts_summary[user_id]
-        ws_totals.append([user_display_name, total_count])
-        # Выделяем жирным
-        ws_totals.cell(row=ws_totals.max_row, column=1).font = Font(bold=True)
-        ws_totals.cell(row=ws_totals.max_row, column=2).font = Font(bold=True)
-
-    # Автонастройка ширины столбцов на листе "Итоги"
-    for col_idx, col in enumerate(ws_totals.columns):
-        max_length = 0
-        column_letter = get_column_letter(col_idx + 1)
-        for cell in col:
-            try:
-                if cell.value:
-                    max_length = max(max_length, len(str(cell.value)))
-            except:
-                pass
-        adjusted_width = (max_length + 2) * 1.2
-        ws_totals.column_dimensions[column_letter].width = adjusted_width
 
     # --- ОТДЕЛЬНЫЕ ЛИСТЫ ДЛЯ КАЖДОГО ПОЛЬЗОВАТЕЛЯ ---
     user_records = defaultdict(list)
@@ -405,40 +345,53 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
         user_id = record[3]
         username = record[4]
         fullname = record[5]
-        display_name = fullname if fullname else (f"@{username}" if username else f"ID: {user_id}")
+        # Предпочтение: Full Name, затем Username, затем ID
+        display_name = fullname if fullname else (f"@{username}" if username else f"ID_{user_id}")
         
         user_records[user_id].append(record)
         if user_id not in user_info_for_sheets:
             user_info_for_sheets[user_id] = display_name
 
+    # Сортируем пользователей по их отображаемому имени для последовательности листов
     sorted_user_ids = sorted(user_records.keys(), key=lambda user_id: user_info_for_sheets[user_id].lower())
 
-    user_sheet_headers = ["ID", "Номер Самоката", "Сервис", "Время Принятия", "ID Чата"] # Заголовки для листов пользователей
+    # Заголовки, которые будут на каждом листе пользователя
+    # ID записи, Номер Самоката, Сервис, Время Принятия, ID Чата
+    user_sheet_headers = ["ID записи", "Номер Самоката", "Сервис", "Время Принятия", "ID Чата"] 
 
     for user_id in sorted_user_ids:
         user_display_name = user_info_for_sheets[user_id]
-        # Telegram username может быть длиной до 32 символов.
-        # Имя листа в Excel не может превышать 31 символ и не может содержать некоторые спец. символы.
-        # Очищаем имя для листа
-        sheet_name_raw = f"{user_display_name[:25].replace('@', '')}" # Обрезаем и убираем @
-        # Удаляем недопустимые символы для имени листа
+        
+        # Очистка и формирование имени листа
+        # Лимит на имя листа в Excel - 31 символ
+        # Недопустимые символы: \ / : * ? " < > |
+        sheet_name_raw = user_display_name # Начинаем с полного имени/никнейма
+        
+        # Удаляем запрещенные символы
         invalid_chars = re.compile(r'[\\/:*?"<>|]')
         sheet_name = invalid_chars.sub('', sheet_name_raw)
         
-        # Добавляем префикс ID, если после очистки имя пустое или слишком короткое,
-        # или если оно совпадает с уже существующим листом (крайне маловероятно после обработки)
-        if not sheet_name or len(sheet_name) < 3: # Если имя слишком короткое после очистки
-             sheet_name = f"ID{user_id}"
-        
-        # Убедимся, что имя листа уникально (если вдруг совпадения по коротким именам)
+        # Обрезаем до 31 символа, если необходимо
+        if len(sheet_name) > 31:
+            sheet_name = sheet_name[:31]
+            
+        # Если после очистки и обрезки имя пустое, слишком короткое или неподходящее
+        if not sheet_name.strip() or len(sheet_name.strip()) < 3: # Проверяем на пустые строки или очень короткие
+             sheet_name = f"ID_{user_id}" # Используем ID как запасной вариант
+
+        # Убедимся, что имя листа уникально
         original_sheet_name = sheet_name
         counter = 1
         while sheet_name in wb.sheetnames:
-            sheet_name = f"{original_sheet_name[:28]}{counter}" # Добавляем счетчик, чтобы не превысить 31 символ
+            # Если имя уже занято, добавляем счетчик
+            # Стараемся уместиться в 31 символ
+            suffix = f"_{counter}"
+            sheet_name = f"{original_sheet_name[:31 - len(suffix)]}{suffix}"
             counter += 1
 
-        ws_user = wb.create_sheet(title=sheet_name)
+        ws_user = wb.create_sheet(title=sheet_name) # Создаем новый лист для пользователя
         
+        # Записываем заголовки
         ws_user.append(user_sheet_headers)
         for cell in ws_user[1]:
             cell.font = header_font
@@ -447,10 +400,9 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
         user_service_breakdown = defaultdict(int) # Для статистики по сервисам на листе пользователя
 
         # Записи для текущего пользователя
+        # Структура record: ID, Номер Самоката, Сервис, ID Пользователя, Ник, Полное имя, Время Принятия, ID Чата
+        # Для листа пользователя нам нужны: ID записи (0), Номер Самоката (1), Сервис (2), Время Принятия (6), ID Чата (7)
         for record in user_records[user_id]:
-            # Отфильтровываем user_id, username, fullname, chat_id (дублируются в названии листа)
-            # Структура record: ID, Номер Самоката, Сервис, ID Пользователя, Ник, Полное имя, Время Принятия, ID Чата
-            # Новая строка: ID, Номер Самоката, Сервис, Время Принятия, ID Чата
             row_to_add = [record[0], record[1], record[2], record[6], record[7]]
             ws_user.append(row_to_add)
             current_user_total += 1
@@ -459,26 +411,34 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
         # Добавляем итоговую информацию в конце листа пользователя
         ws_user.append([]) # Пустая строка для разделения
         
+        # Статистика по сервисам
         ws_user.append(["Статистика по сервисам:"])
         ws_user.cell(row=ws_user.max_row, column=1).font = Font(bold=True)
-        ws_user.merge_cells(start_row=ws_user.max_row, start_column=1, end_row=ws_user.max_row, end_column=2)
+        # Объединяем ячейки для заголовка статистики, если нужно, чтобы он был по центру
+        ws_user.merge_cells(start_row=ws_user.max_row, start_column=1, end_row=ws_user.max_row, end_column=len(user_sheet_headers))
+        ws_user.cell(row=ws_user.max_row, column=1).alignment = Alignment(horizontal='center')
 
         for service, count in sorted(user_service_breakdown.items()):
-            ws_user.append([service, count])
+            ws_user.append([service, count]) # Начинаем с первой колонки
 
         ws_user.append([]) # Еще одна пустая строка
         
+        # Общий итог
         ws_user.append(["Всего принято:", current_user_total])
+        # Объединяем ячейки "Всего принято:"
+        ws_user.merge_cells(start_row=ws_user.max_row, start_column=1, end_row=ws_user.max_row, end_column=len(user_sheet_headers) - 1)
         ws_user.cell(row=ws_user.max_row, column=1).font = Font(bold=True)
-        ws_user.cell(row=ws_user.max_row, column=2).font = Font(bold=True)
         ws_user.cell(row=ws_user.max_row, column=1).alignment = Alignment(horizontal='right')
-        ws_user.cell(row=ws_user.max_row, column=2).alignment = Alignment(horizontal='center')
+        ws_user.cell(row=ws_user.max_row, column=len(user_sheet_headers)).font = Font(bold=True)
+        ws_user.cell(row=ws_user.max_row, column=len(user_sheet_headers)).alignment = Alignment(horizontal='center')
+
 
         # Автонастройка ширины столбцов на листе пользователя
-        for col_idx, col in enumerate(ws_user.columns):
+        # Учитываем только те столбцы, которые есть в user_sheet_headers
+        for col_idx in range(len(user_sheet_headers)):
             max_length = 0
             column_letter = get_column_letter(col_idx + 1)
-            for cell in col:
+            for cell in ws_user[column_letter]: # Итерируемся по ячейкам конкретной колонки
                 try:
                     if cell.value:
                         length = len(str(cell.value))
@@ -494,176 +454,4 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
     buffer.seek(0)
     return buffer
 
-async def process_scooter_text(message: types.Message, text_to_process: str):
-    user = message.from_user
-    now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
-
-    records_to_insert = []
-    accepted_summary = defaultdict(int)
-    
-    text_for_numbers = text_to_process
-
-    batch_matches = BATCH_QUANTITY_PATTERN.findall(text_to_process)
-    if batch_matches:
-        for service_raw, quantity_str in batch_matches:
-            service = SERVICE_ALIASES.get(service_raw.lower())
-            try:
-                quantity = int(quantity_str)
-                if service and 0 < quantity <= 200:
-                    for i in range(quantity):
-                        placeholder_number = f"{service.upper()}_BATCH_{datetime.datetime.now().strftime('%H%M%S%f')}_{i+1}" 
-                        records_to_insert.append((placeholder_number, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
-                    accepted_summary[service] += quantity
-            except (ValueError, TypeError):
-                continue
-        text_for_numbers = BATCH_QUANTITY_PATTERN.sub('', text_to_process)
-
-    patterns = {
-        "Яндекс": YANDEX_SCOOTER_PATTERN,
-        "Whoosh": WOOSH_SCOOTER_PATTERN,
-        "Jet": JET_SCOOTER_PATTERN
-    }
-    
-    processed_numbers = set()
-
-    for service, pattern in patterns.items():
-        numbers = pattern.findall(text_for_numbers)
-        for num in numbers:
-            clean_num = num.replace('-', '') if service == "Jet" else num.upper()
-            
-            if clean_num in processed_numbers:
-                continue
-            
-            records_to_insert.append((clean_num, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
-            accepted_summary[service] += 1
-            processed_numbers.add(clean_num)
-
-    if not records_to_insert:
-        return False
-
-    await db_write_batch(records_to_insert)
-
-    response_parts = []
-    user_mention = types.User.get_mention(user)
-    total_accepted = sum(accepted_summary.values())
-    response_parts.append(f"{user_mention}, принято {total_accepted} шт.:")
-
-    for service, count in sorted(accepted_summary.items()):
-        if count > 0:
-            response_parts.append(f"  - <b>{service}</b>: {count} шт.")
-
-    await message.reply("\n".join(response_parts))
-    return True
-
-@dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.TEXT)
-async def handle_text_messages(message: types.Message):
-    if message.text.startswith('/'):
-        return
-    await process_scooter_text(message, message.text)
-
-@dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.PHOTO)
-async def handle_photo_messages(message: types.Message):
-    if message.caption:
-        await process_scooter_text(message, message.caption)
-
-@dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.ANY)
-async def handle_unsupported_content(message: types.Message):
-    if message.text and message.text.startswith('/'):
-        return
-    if not (message.photo or (message.text and not message.text.startswith('/'))):
-        await message.reply("Извините, я могу обрабатывать только текстовые сообщения и фотографии (с подписями). "
-                            "Видео, документы и другие файлы я не поддерживаю.")
-
-async def send_scheduled_report(shift_type: str):
-    logging.info(f"Запуск отправки автоматического отчета для {shift_type} смены.")
-    
-    start_time, end_time, shift_name = get_shift_time_range_for_report(shift_type)
-    
-    if not start_time or not end_time:
-        logging.error(f"Не удалось определить временной диапазон для отчета '{shift_type}' смены.")
-        return
-
-    start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
-    end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
-
-    query = "SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
-    records = await db_fetch_all(query, (start_str, end_str))
-
-    if not records:
-        message_text = f"Отчет за {shift_name} ({start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}): За смену ничего не принято."
-        for chat_id in REPORT_CHAT_IDS:
-            try:
-                await bot.send_message(chat_id, message_text)
-                logging.info(f"Отправлено уведомление об отсутствии данных за {shift_name} в чат {chat_id}.")
-            except Exception as e:
-                logging.error(f"Ошибка отправки уведомления в чат {chat_id}: {e}")
-        return
-
-    try:
-        excel_file = create_excel_report(records)
-        report_type_filename = "morning_shift" if shift_type == 'morning' else "evening_shift"
-        filename = f"report_{report_type_filename}_{start_time.strftime('%Y%m%d')}.xlsx"
-        caption = f"Ежедневный отчет за {shift_name} ({start_time.strftime('%d.%m %H:%M')} - {end_time.strftime('%d.%m %H:%M')})"
-        
-        for chat_id in REPORT_CHAT_IDS:
-            try:
-                excel_file.seek(0) 
-                await bot.send_document(chat_id, types.InputFile(excel_file, filename=filename), caption=caption)
-                logging.info(f"Отправлен Excel отчет за {shift_name} в чат {chat_id}.")
-            except Exception as e:
-                logging.error(f"Ошибка отправки Excel файла в чат {chat_id}: {e}", exc_info=True)
-
-    except Exception as e:
-        logging.error(f"Произошла общая ошибка при формировании или отправке Excel отчета: {e}", exc_info=True)
-        for admin_id in ADMIN_IDS:
-            try:
-                await bot.send_message(admin_id, f"Ошибка при формировании/отправке отчета за {shift_name}: {e}")
-            except Exception as err:
-                logging.error(f"Не удалось отправить уведомление об ошибке администратору {admin_id}: {err}")
-
-
-async def on_startup(dispatcher: Dispatcher):
-    global db_executor
-    db_executor = ThreadPoolExecutor(max_workers=5)
-    
-    loop = asyncio.get_running_loop()
-    await loop.run_in_executor(db_executor, init_db)
-    
-    global scheduler
-    scheduler = AsyncIOScheduler(timezone=str(TIMEZONE))
-    
-    scheduler.add_job(send_scheduled_report, 'cron', hour=15, minute=0, timezone=str(TIMEZONE), args=['morning'])
-    logging.info("Задача для отправки утреннего отчета (в 15:00) запланирована.")
-    
-    scheduler.add_job(send_scheduled_report, 'cron', hour=23, minute=0, timezone=str(TIMEZONE), args=['evening'])
-    logging.info("Задача для отправки вечернего отчета (в 23:00) запланирована.")
-    
-    scheduler.start()
-    logging.info("APScheduler запущен.")
-    
-    admin_commands = [
-        types.BotCommand(command="start", description="Начало работы"),
-        types.BotCommand(command="today_stats", description="Статистика за текущую смену"),
-        types.BotCommand(command="export_today_excel", description="Экспорт Excel за текущую смену"),
-        types.BotCommand(command="export_all_excel", description="Экспорт Excel за все время"),
-        types.BotCommand(command="batch_accept", description="Пакетный прием (сервис кол-во)"),
-    ]
-    await dispatcher.bot.set_my_commands(admin_commands)
-    logging.info("Бот запущен и команды установлены.")
-
-
-async def on_shutdown(dispatcher: Dispatcher):
-    global db_executor
-    if db_executor:
-        db_executor.shutdown(wait=True)
-    
-    global scheduler
-    if scheduler:
-        scheduler.shutdown()
-        logging.info("APScheduler остановлен.")
-        
-    logging.info("Пул потоков БД остановлен.")
-    logging.info("Бот остановлен.")
-
-if __name__ == "__main__":
-    executor.start_polling(dp, on_startup=on_startup, on_shutdown=on_shutdown, skip_updates=True)
+# ... (Остальной код бота, включая функции, которые не были изменены) ...
