@@ -15,18 +15,19 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.utils import executor
 from aiogram.dispatcher.filters import BoundFilter
-from aiogram.utils.exceptions import MessageIsTooLong # Импортируем исключение
+from aiogram.utils.exceptions import MessageIsTooLong
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
+# Импортируем APScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Загрузка переменных окружения из .env файла
 load_dotenv()
 
-# Получение токена бота и ID администраторов/разрешенных чатов
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден в .env файле. Пожалуйста, добавьте его.")
@@ -34,60 +35,54 @@ if not BOT_TOKEN:
 try:
     ADMIN_IDS = {int(admin_id) for admin_id in os.getenv('ADMIN_IDS', '').split(',') if admin_id.strip()}
     ALLOWED_CHAT_IDS = {int(chat_id) for chat_id in os.getenv('ALLOWED_CHAT_IDS', '').split(',') if chat_id.strip()}
+    # Новая переменная для ID групп, куда отправлять отчеты
+    REPORT_CHAT_IDS = {int(chat_id) for chat_id in os.getenv('REPORT_CHAT_IDS', '').split(',') if chat_id.strip()}
 except ValueError:
-    logging.error("Не удалось прочитать ADMIN_IDS или ALLOWED_CHAT_IDS. Убедитесь, что они являются числами, разделенными запятыми.")
+    logging.error("Не удалось прочитать ADMIN_IDS, ALLOWED_CHAT_IDS или REPORT_CHAT_IDS. Убедитесь, что они являются числами, разделенными запятыми.")
     ADMIN_IDS = set()
     ALLOWED_CHAT_IDS = set()
+    REPORT_CHAT_IDS = set() # Инициализируем пустым множеством, если ошибка
 
-# Константы для работы бота
 DB_NAME = 'scooters.db'
 TIMEZONE = pytz.timezone('Asia/Almaty') # Ваша таймзона UTC+5
 
-# Регулярные выражения для определения номеров самокатов по сервисам
 YANDEX_SCOOTER_PATTERN = re.compile(r'\b(\d{8})\b')
 WOOSH_SCOOTER_PATTERN = re.compile(r'\b([A-ZА-Я]{2}\d{4})\b', re.IGNORECASE)
 JET_SCOOTER_PATTERN = re.compile(r'\b(\d{3}-?\d{3})\b')
 
-# Регулярное выражение и алиасы для пакетного приема самокатов
 BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|yandex|вуш|джет|яндекс|w|j|y)\s+(\d+)\b', re.IGNORECASE)
 SERVICE_ALIASES = {
     "yandex": "Яндекс", "яндекс": "Яндекс", "y": "Яндекс",
     "whoosh": "Whoosh", "вуш": "Whoosh", "w": "Whoosh",
     "jet": "Jet", "джет": "Jet", "j": "Jet"
 }
-SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"} # На случай если понадобится полное имя сервиса
+SERVICE_MAP = {"yandex": "Яндекс", "whoosh": "Whoosh", "jet": "Jet"}
 
-# Инициализация бота и диспетчера
 bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
-# Инициализация пула потоков для работы с базой данных
 db_executor = None
+scheduler = None # Объявляем глобальную переменную для планировщика
 
-# --- Фильтры для контроля доступа ---
 class IsAdminFilter(BoundFilter):
     async def check(self, message: types.Message) -> bool:
         return message.from_user.id in ADMIN_IDS
 
 class IsAllowedChatFilter(BoundFilter):
     async def check(self, message: types.Message) -> bool:
-        # Разрешаем администраторам писать в личку
         if message.chat.type == 'private' and message.from_user.id in ADMIN_IDS:
             return True
-        # Разрешаем сообщения в указанных группах
         if message.chat.type in ['group', 'supergroup'] and message.chat.id in ALLOWED_CHAT_IDS:
             return True
-        # Логируем попытки неразрешенного доступа
         logging.warning(f"Сообщение от {message.from_user.id} в чате {message.chat.id} было заблокировано фильтром.")
         return False
 
-# --- Функции для работы с базой данных ---
 def run_db_query(query: str, params: tuple = (), fetch: str = None):
     conn = None
     try:
         conn = sqlite3.connect(DB_NAME, timeout=10)
-        conn.execute("PRAGMA journal_mode=WAL;") # Включаем WAL режим для лучшей производительности и конкурентности
+        conn.execute("PRAGMA journal_mode=WAL;")
         cursor = conn.cursor()
         cursor.execute(query, params)
         conn.commit()
@@ -147,7 +142,6 @@ async def db_fetch_all(query: str, params: tuple = ()):
     global db_executor
     return await loop.run_in_executor(db_executor, run_db_query, query, params, 'all')
 
-# --- Команды бота ---
 @dp.message_handler(IsAllowedChatFilter(), commands="start")
 async def command_start_handler(message: types.Message):
     allowed_chats_info = ', '.join(map(str, ALLOWED_CHAT_IDS)) if ALLOWED_CHAT_IDS else "не указаны"
@@ -186,7 +180,7 @@ async def batch_accept_handler(message: types.Message):
 
     records_to_insert = [
         (
-            f"{service.upper()}_BATCH_{i+1}", # Создаем уникальный номер для каждой записи в пакете
+            f"{service.upper()}_BATCH_{i+1}",
             service, user.id, user.username, user.full_name, now_localized_str, message.chat.id
         ) for i in range(quantity)
     ]
@@ -196,14 +190,40 @@ async def batch_accept_handler(message: types.Message):
     user_mention = types.User.get_mention(user)
     await message.reply(f"{user_mention}, принято {quantity} самокатов сервиса <b>{service}</b>.")
 
+def get_shift_time_range_for_report(shift_type: str):
+    """
+    Определяет начало и конец смены для отчета.
+    'morning' - с 07:00 до 15:00 текущего дня.
+    'evening' - с 15:00 предыдущего дня (или текущего, если уже 15:00) до 23:00 текущего дня,
+                включая ночной период до 04:00 следующего дня.
+    """
+    now = datetime.datetime.now(TIMEZONE)
+    today = now.date()
+    
+    if shift_type == 'morning':
+        start_time = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(7, 0, 0)))
+        end_time = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
+        shift_name = "утреннюю смену"
+    elif shift_type == 'evening':
+        # Вечерняя смена начинается в 15:00 текущего дня и заканчивается в 23:00
+        # НО, для отчета мы хотим включить записи до 04:00 следующего дня.
+        evening_start_actual = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
+        # Конец отчета по вечерней смене - это 04:00 следующего дня
+        evening_end_extended = TIMEZONE.localize(datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time(4, 0, 0)))
+        
+        start_time = evening_start_actual
+        end_time = evening_end_extended
+        shift_name = "вечернюю смену (с учетом ночных часов)"
+    else:
+        # Для других случаев (например, если вызывается get_shift_time_range(), которая сложнее)
+        # или если передан некорректный shift_type, можно вернуть None или вызвать ошибку.
+        return None, None, None
+        
+    return start_time, end_time, shift_name
+
+
 def get_shift_time_range():
-    """
-    Определяет начало и конец текущей смены (утренней или вечерней) в Almaty (UTC+5).
-    Утренняя смена: 07:00 - 15:00
-    Вечерняя смена: 15:00 - 23:00
-    Ночной период (с 23:00 до 04:00 следующего дня) относится к предыдущей вечерней смене.
-    Период с 04:00 до 07:00 считается межсменным, но для статистики возвращает диапазон предстоящей утренней смены.
-    """
+    """Определяет начало и конец текущей смены (утренней или вечерней) для интерактивных запросов (/today_stats)."""
     now = datetime.datetime.now(TIMEZONE)
     today = now.date()
 
@@ -212,30 +232,24 @@ def get_shift_time_range():
     evening_shift_start = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
     evening_shift_end = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(23, 0, 0)))
 
-    # Если текущее время между 07:00 и 15:00 (утренняя смена)
     if morning_shift_start <= now < morning_shift_end:
         return morning_shift_start, morning_shift_end, "утреннюю смену"
-    # Если текущее время между 15:00 и 23:00 (вечерняя смена)
     elif evening_shift_start <= now < evening_shift_end:
         return evening_shift_start, evening_shift_end, "вечернюю смену"
-    # Если сейчас ночь (после 23:00 текущего дня или до 07:00 следующего дня)
     else:
-        # Определяем ночной интервал, который относится к предыдущей вечерней смене
-        night_start_prev_day = TIMEZONE.localize(datetime.datetime.combine(today - datetime.timedelta(days=1), datetime.time(23, 0, 0)))
-        night_end_current_day = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(4, 0, 0)))
+        prev_day = today - datetime.timedelta(days=1)
+        night_cutoff_current_day = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(4, 0, 0)))
 
-        # Если сейчас между 23:00 текущего дня и 00:00 следующего дня (включительно)
-        if now.hour >= 23:
-            # Это все еще часть "текущей" вечерней смены (до ее официального конца в 23:00)
-            return evening_shift_start, evening_shift_end, "вечернюю смену"
-        # Если сейчас между 00:00 и 04:00 текущего дня (ночные часы, относящиеся к ВЧЕРАШНЕЙ вечерней смене)
-        elif TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(0,0,0))) <= now < night_end_current_day:
-            prev_evening_shift_start = TIMEZONE.localize(datetime.datetime.combine(today - datetime.timedelta(days=1), datetime.time(15, 0, 0)))
-            return prev_evening_shift_start, night_end_current_day, "вечернюю смену (с учетом ночных часов)"
-        # Если время с 04:00 до 07:00 (межсменное время, до начала новой утренней)
+        # Если сейчас между 00:00 и 04:00 текущего дня, это продолжение вчерашней вечерней смены
+        if TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(0,0,0))) <= now < night_cutoff_current_day:
+            prev_evening_shift_start = TIMEZONE.localize(datetime.datetime.combine(prev_day, datetime.time(15, 0, 0)))
+            return prev_evening_shift_start, night_cutoff_current_day, "вечернюю смену (с учетом ночных часов)"
+        # Если время с 04:00 до 07:00, или после 23:00 и до полуночи
         else:
-            # Для команды /today_stats в этот период возвращаем диапазон предстоящей утренней смены
-            # (которая на данный момент будет пустой)
+            # Для простоты, если сейчас после 23:00, то для /today_stats мы показываем текущую вечернюю смену
+            if now.hour >= 23:
+                return evening_shift_start, evening_shift_end, "вечернюю смену"
+            # Если с 04:00 до 07:00, то показываем будущую утреннюю смену (которая пока пуста)
             return morning_shift_start, morning_shift_end, "утреннюю смену (еще не началась)"
 
 
@@ -243,11 +257,9 @@ def get_shift_time_range():
 async def today_stats_handler(message: types.Message):
     start_time, end_time, shift_name = get_shift_time_range()
     
-    # Форматируем времена для запроса к БД
     start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
     end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
 
-    # Изменяем запрос, чтобы использовать диапазон времени
     query = "SELECT service, accepted_by_user_id, accepted_by_username, accepted_by_fullname FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
     records = await db_fetch_all(query, (start_str, end_str))
 
@@ -281,27 +293,18 @@ async def today_stats_handler(message: types.Message):
 
     response_parts.append(f"\n<b>Общий итог за {shift_name}: {total_all_users} шт.</b>")
     
-    # --- БЛОК ДЛЯ РАЗДЕЛЕНИЯ СООБЩЕНИЯ ---
-    MESSAGE_LIMIT = 4000  # Максимальная длина сообщения в Telegram - 4096 символов. Оставляем запас.
+    MESSAGE_LIMIT = 4000
     current_message_buffer = []
     
     for part in response_parts:
-        # Проверяем, если добавление текущей части (с учетом новой строки) превысит лимит
-        # len('\n'.join(current_message_buffer)) - длина уже накопленных строк
-        # len(part) - длина текущей строки
-        # (1 if current_message_buffer else 0) - добавляем 1 за '\n', если буфер не пуст
         if len('\n'.join(current_message_buffer)) + len(part) + (1 if current_message_buffer else 0) > MESSAGE_LIMIT:
-            # Отправляем текущий буфер, если он не пуст
             if current_message_buffer:
                 await message.answer("\n".join(current_message_buffer))
-                current_message_buffer = [] # Очищаем буфер
-        
+                current_message_buffer = []
         current_message_buffer.append(part)
     
-    # Отправляем оставшиеся части, если они есть в буфере
     if current_message_buffer:
         await message.answer("\n".join(current_message_buffer))
-    # --- КОНЕЦ БЛОКА РАЗДЕЛЕНИЯ СООБЩЕНИЯ ---
 
 
 @dp.message_handler(IsAdminFilter(), commands=["export_today_excel", "export_all_excel"])
@@ -313,6 +316,7 @@ async def export_excel_handler(message: types.Message):
     query = "SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters"
     
     if is_today_shift:
+        # Для экспорта "сегодняшней" смены используем функцию для интерактивных запросов
         start_time, end_time, shift_name = get_shift_time_range()
         start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
         end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -320,7 +324,7 @@ async def export_excel_handler(message: types.Message):
         records = await db_fetch_all(query, (start_str, end_str))
         date_filter_text = f" за {shift_name}"
     else:
-        query += " ORDER BY timestamp DESC" # Сортируем по дате для полного отчета
+        query += " ORDER BY timestamp DESC"
         records = await db_fetch_all(query)
         date_filter_text = " за все время"
 
@@ -352,14 +356,8 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
         cell.font = header_font
 
     for row in records:
-        # Примечание: если timestamp в БД хранится как строка, openpyxl обычно хорошо справляется.
-        # Если нужна дата/время как объект для Excel, можно добавить:
-        # row_list = list(row)
-        # row_list[6] = datetime.datetime.strptime(row_list[6], "%Y-%m-%d %H:%M:%S") # если нужно преобразовать
-        # ws.append(row_list)
         ws.append(row)
 
-    # Автонастройка ширины столбцов на листе "Данные"
     for col in ws.columns:
         max_length = 0
         column_letter = col[0].column_letter
@@ -379,7 +377,7 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
         cell.font = header_font
 
     user_service_counts = defaultdict(lambda: defaultdict(int))
-    user_info_map = {} # Для хранения ников/полных имен, чтобы использовать их для сортировки
+    user_info_map = {}
 
     for record in records:
         service = record[2]
@@ -387,29 +385,21 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
         username = record[4]
         fullname = record[5]
         
-        # Используем полное имя, если есть, иначе ник, иначе ID
         display_name = fullname if fullname else (f"@{username}" if username else f"ID: {user_id}")
         
         user_service_counts[user_id][service] += 1
         if user_id not in user_info_map:
             user_info_map[user_id] = display_name
 
-    # Сортируем сначала по отображаемому имени пользователя (без учета регистра), затем по сервису
     sorted_user_ids = sorted(user_service_counts.keys(), key=lambda user_id: user_info_map[user_id].lower())
 
     for user_id in sorted_user_ids:
         user_display_name = user_info_map[user_id]
         services_data = user_service_counts[user_id]
         
-        # Добавляем строку-разделитель или заголовок для каждого пользователя (опционально, сейчас просто подряд)
-        # Если вы хотите "пустую" строку между пользователями, можно добавить:
-        # if ws_summary.max_row > 1: # Пропускаем для первой группы
-        #     ws_summary.append(["", "", ""]) # Пустая строка как разделитель
-        
         for service, count in sorted(services_data.items()):
             ws_summary.append([user_display_name, service, count])
     
-    # Автонастройка ширины столбцов на листе "Сводка"
     for col in ws_summary.columns:
         max_length = 0
         column_letter = col[0].column_letter
@@ -427,7 +417,6 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
     buffer.seek(0)
     return buffer
 
-# --- Унифицированная функция для обработки текста из любого источника (сообщения или подписи) ---
 async def process_scooter_text(message: types.Message, text_to_process: str):
     user = message.from_user
     now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
@@ -435,10 +424,8 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
     records_to_insert = []
     accepted_summary = defaultdict(int)
     
-    # Копия текста, из которой будут удаляться уже обработанные пакетные записи
     text_for_numbers = text_to_process
 
-    # Поиск и обработка пакетных записей
     batch_matches = BATCH_QUANTITY_PATTERN.findall(text_to_process)
     if batch_matches:
         for service_raw, quantity_str in batch_matches:
@@ -447,38 +434,35 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
                 quantity = int(quantity_str)
                 if service and 0 < quantity <= 200:
                     for i in range(quantity):
-                        # Создаем уникальный, но понятный номер для каждой записи в пакете
-                        placeholder_number = f"{service.upper()}_BATCH_{now.strftime('%H%M%S%f')}_{i+1}" 
+                        placeholder_number = f"{service.upper()}_BATCH_{datetime.datetime.now().strftime('%H%M%S%f')}_{i+1}" 
                         records_to_insert.append((placeholder_number, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
                     accepted_summary[service] += quantity
             except (ValueError, TypeError):
                 continue
-        # Удаляем обработанные пакетные записи из текста, чтобы они не мешали поиску одиночных номеров
         text_for_numbers = BATCH_QUANTITY_PATTERN.sub('', text_to_process)
 
-    # Поиск и обработка одиночных номеров
     patterns = {
         "Яндекс": YANDEX_SCOOTER_PATTERN,
         "Whoosh": WOOSH_SCOOTER_PATTERN,
         "Jet": JET_SCOOTER_PATTERN
     }
     
-    processed_numbers = set() # Множество для отслеживания уже обработанных номеров
+    processed_numbers = set()
 
     for service, pattern in patterns.items():
         numbers = pattern.findall(text_for_numbers)
         for num in numbers:
             clean_num = num.replace('-', '') if service == "Jet" else num.upper()
             
-            if clean_num in processed_numbers: # Проверяем, не был ли номер уже добавлен
+            if clean_num in processed_numbers:
                 continue
             
             records_to_insert.append((clean_num, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
             accepted_summary[service] += 1
-            processed_numbers.add(clean_num) # Добавляем номер в список обработанных
+            processed_numbers.add(clean_num)
 
     if not records_to_insert:
-        return False # Ничего не найдено и не обработано
+        return False
 
     await db_write_batch(records_to_insert)
 
@@ -492,44 +476,102 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
             response_parts.append(f"  - <b>{service}</b>: {count} шт.")
 
     await message.reply("\n".join(response_parts))
-    return True # Что-то было найдено и обработано
+    return True
 
-
-# --- Обработчики сообщений ---
-# Обработчик обычных текстовых сообщений
 @dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.TEXT)
 async def handle_text_messages(message: types.Message):
-    if message.text.startswith('/'): # Пропускаем команды, они обрабатываются другими хэндлерами
+    if message.text.startswith('/'):
         return
     await process_scooter_text(message, message.text)
 
-# Обработчик фотографий (с подписью)
 @dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.PHOTO)
 async def handle_photo_messages(message: types.Message):
-    if message.caption: # Если у фото есть подпись, пытаемся её обработать
+    if message.caption:
         await process_scooter_text(message, message.caption)
-    # else: Если подписи нет, бот ничего не будет отвечать, просто проигнорирует.
 
-# Обработчик для всех остальных типов контента (видео, аудио, документы и т.д.)
-# Этот обработчик должен быть ПОСЛЕДНИМ, чтобы не перехватывать другие типы сообщений.
 @dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.ANY)
 async def handle_unsupported_content(message: types.Message):
-    if message.text and message.text.startswith('/'): # Игнорируем команды
+    if message.text and message.text.startswith('/'):
         return
-    # Если это не фото и не обычный текст, сообщаем пользователю, что не поддерживаем
     if not (message.photo or (message.text and not message.text.startswith('/'))):
         await message.reply("Извините, я могу обрабатывать только текстовые сообщения и фотографии (с подписями). "
                             "Видео, документы и другие файлы я не поддерживаю.")
 
-# --- Функции, выполняемые при запуске и остановке бота ---
+# --- НОВАЯ ФУНКЦИЯ ДЛЯ ОТПРАВКИ ОТЧЕТА ПО РАСПИСАНИЮ ---
+async def send_scheduled_report(shift_type: str):
+    logging.info(f"Запуск отправки автоматического отчета для {shift_type} смены.")
+    
+    start_time, end_time, shift_name = get_shift_time_range_for_report(shift_type)
+    
+    if not start_time or not end_time:
+        logging.error(f"Не удалось определить временной диапазон для отчета '{shift_type}' смены.")
+        return
+
+    start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
+    end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
+
+    query = "SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
+    records = await db_fetch_all(query, (start_str, end_str))
+
+    if not records:
+        message_text = f"Отчет за {shift_name} ({start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}): За смену ничего не принято."
+        for chat_id in REPORT_CHAT_IDS:
+            try:
+                await bot.send_message(chat_id, message_text)
+                logging.info(f"Отправлено уведомление об отсутствии данных за {shift_name} в чат {chat_id}.")
+            except Exception as e:
+                logging.error(f"Ошибка отправки уведомления в чат {chat_id}: {e}")
+        return
+
+    try:
+        excel_file = create_excel_report(records)
+        report_type_filename = "morning_shift" if shift_type == 'morning' else "evening_shift"
+        filename = f"report_{report_type_filename}_{start_time.strftime('%Y%m%d')}.xlsx"
+        caption = f"Ежедневный отчет за {shift_name} ({start_time.strftime('%d.%m %H:%M')} - {end_time.strftime('%d.%m %H:%M')})"
+        
+        for chat_id in REPORT_CHAT_IDS:
+            try:
+                await bot.send_document(chat_id, types.InputFile(excel_file, filename=filename), caption=caption)
+                logging.info(f"Отправлен Excel отчет за {shift_name} в чат {chat_id}.")
+                # Сброс буфера для следующей отправки (если групп несколько)
+                excel_file.seek(0)
+            except Exception as e:
+                logging.error(f"Ошибка отправки Excel файла в чат {chat_id}: {e}", exc_info=True)
+
+    except Exception as e:
+        logging.error(f"Произошла общая ошибка при формировании или отправке Excel отчета: {e}", exc_info=True)
+        # Уведомляем администраторов, если не удалось отправить отчет
+        for admin_id in ADMIN_IDS:
+            try:
+                await bot.send_message(admin_id, f"Ошибка при формировании/отправке отчета за {shift_name}: {e}")
+            except Exception as err:
+                logging.error(f"Не удалось отправить уведомление об ошибке администратору {admin_id}: {err}")
+
+
+# --- Функции запуска/остановки бота и планировщика ---
 async def on_startup(dispatcher: Dispatcher):
-    global db_executor # Объявляем, что используем глобальную переменную
-    db_executor = ThreadPoolExecutor(max_workers=5) # Инициализируем пул потоков здесь
+    global db_executor
+    db_executor = ThreadPoolExecutor(max_workers=5)
     
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(db_executor, init_db) # Инициализируем БД в отдельном потоке
+    await loop.run_in_executor(db_executor, init_db)
     
-    # Установка команд для бота
+    # Инициализация и запуск планировщика
+    global scheduler
+    scheduler = AsyncIOScheduler(timezone=str(TIMEZONE)) # Указываем таймзону для планировщика
+    
+    # Планируем задачу для конца утренней смены (в 15:00 каждый день)
+    scheduler.add_job(send_scheduled_report, 'cron', hour=15, minute=0, timezone=str(TIMEZONE), args=['morning'])
+    logging.info("Задача для отправки утреннего отчета (в 15:00) запланирована.")
+    
+    # Планируем задачу для конца вечерней смены (в 23:00 каждый день)
+    # Отчет будет включать данные до 04:00 следующего дня, но запускается в 23:00
+    scheduler.add_job(send_scheduled_report, 'cron', hour=23, minute=0, timezone=str(TIMEZONE), args=['evening'])
+    logging.info("Задача для отправки вечернего отчета (в 23:00) запланирована.")
+    
+    scheduler.start()
+    logging.info("APScheduler запущен.")
+    
     admin_commands = [
         types.BotCommand(command="start", description="Начало работы"),
         types.BotCommand(command="today_stats", description="Статистика за текущую смену"),
@@ -542,12 +584,17 @@ async def on_startup(dispatcher: Dispatcher):
 
 
 async def on_shutdown(dispatcher: Dispatcher):
-    global db_executor # Объявляем, что используем глобальную переменную
+    global db_executor
     if db_executor:
-        db_executor.shutdown(wait=True) # Корректное завершение пула потоков
+        db_executor.shutdown(wait=True)
+    
+    global scheduler
+    if scheduler:
+        scheduler.shutdown() # Корректное завершение планировщика
+        logging.info("APScheduler остановлен.")
+        
     logging.info("Пул потоков БД остановлен.")
     logging.info("Бот остановлен.")
 
-# Запуск бота
 if __name__ == "__main__":
     executor.start_polling(dp, on_startup=on_startup, on_shutdown=on_shutdown, skip_updates=True)
