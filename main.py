@@ -19,10 +19,10 @@ from aiogram.utils.exceptions import MessageIsTooLong
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Font, Alignment # Импортируем Alignment для выравнивания
+from openpyxl.utils import get_column_letter # Для удобства работы с колонками
+from openpyxl.styles import PatternFill # Для заливки ячеек, если нужно
 
-# Импортируем APScheduler
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -35,13 +35,12 @@ if not BOT_TOKEN:
 try:
     ADMIN_IDS = {int(admin_id) for admin_id in os.getenv('ADMIN_IDS', '').split(',') if admin_id.strip()}
     ALLOWED_CHAT_IDS = {int(chat_id) for chat_id in os.getenv('ALLOWED_CHAT_IDS', '').split(',') if chat_id.strip()}
-    # Новая переменная для ID групп, куда отправлять отчеты
     REPORT_CHAT_IDS = {int(chat_id) for chat_id in os.getenv('REPORT_CHAT_IDS', '').split(',') if chat_id.strip()}
 except ValueError:
     logging.error("Не удалось прочитать ADMIN_IDS, ALLOWED_CHAT_IDS или REPORT_CHAT_IDS. Убедитесь, что они являются числами, разделенными запятыми.")
     ADMIN_IDS = set()
     ALLOWED_CHAT_IDS = set()
-    REPORT_CHAT_IDS = set() # Инициализируем пустым множеством, если ошибка
+    REPORT_CHAT_IDS = set()
 
 DB_NAME = 'scooters.db'
 TIMEZONE = pytz.timezone('Asia/Almaty') # Ваша таймзона UTC+5
@@ -63,7 +62,7 @@ storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
 db_executor = None
-scheduler = None # Объявляем глобальную переменную для планировщика
+scheduler = None
 
 class IsAdminFilter(BoundFilter):
     async def check(self, message: types.Message) -> bool:
@@ -191,12 +190,6 @@ async def batch_accept_handler(message: types.Message):
     await message.reply(f"{user_mention}, принято {quantity} самокатов сервиса <b>{service}</b>.")
 
 def get_shift_time_range_for_report(shift_type: str):
-    """
-    Определяет начало и конец смены для отчета.
-    'morning' - с 07:00 до 15:00 текущего дня.
-    'evening' - с 15:00 предыдущего дня (или текущего, если уже 15:00) до 23:00 текущего дня,
-                включая ночной период до 04:00 следующего дня.
-    """
     now = datetime.datetime.now(TIMEZONE)
     today = now.date()
     
@@ -205,25 +198,19 @@ def get_shift_time_range_for_report(shift_type: str):
         end_time = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
         shift_name = "утреннюю смену"
     elif shift_type == 'evening':
-        # Вечерняя смена начинается в 15:00 текущего дня и заканчивается в 23:00
-        # НО, для отчета мы хотим включить записи до 04:00 следующего дня.
         evening_start_actual = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
-        # Конец отчета по вечерней смене - это 04:00 следующего дня
         evening_end_extended = TIMEZONE.localize(datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time(4, 0, 0)))
         
         start_time = evening_start_actual
         end_time = evening_end_extended
         shift_name = "вечернюю смену (с учетом ночных часов)"
     else:
-        # Для других случаев (например, если вызывается get_shift_time_range(), которая сложнее)
-        # или если передан некорректный shift_type, можно вернуть None или вызвать ошибку.
         return None, None, None
         
     return start_time, end_time, shift_name
 
 
 def get_shift_time_range():
-    """Определяет начало и конец текущей смены (утренней или вечерней) для интерактивных запросов (/today_stats)."""
     now = datetime.datetime.now(TIMEZONE)
     today = now.date()
 
@@ -240,16 +227,12 @@ def get_shift_time_range():
         prev_day = today - datetime.timedelta(days=1)
         night_cutoff_current_day = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(4, 0, 0)))
 
-        # Если сейчас между 00:00 и 04:00 текущего дня, это продолжение вчерашней вечерней смены
         if TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(0,0,0))) <= now < night_cutoff_current_day:
             prev_evening_shift_start = TIMEZONE.localize(datetime.datetime.combine(prev_day, datetime.time(15, 0, 0)))
             return prev_evening_shift_start, night_cutoff_current_day, "вечернюю смену (с учетом ночных часов)"
-        # Если время с 04:00 до 07:00, или после 23:00 и до полуночи
         else:
-            # Для простоты, если сейчас после 23:00, то для /today_stats мы показываем текущую вечернюю смену
             if now.hour >= 23:
                 return evening_shift_start, evening_shift_end, "вечернюю смену"
-            # Если с 04:00 до 07:00, то показываем будущую утреннюю смену (которая пока пуста)
             return morning_shift_start, morning_shift_end, "утреннюю смену (еще не началась)"
 
 
@@ -316,7 +299,6 @@ async def export_excel_handler(message: types.Message):
     query = "SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters"
     
     if is_today_shift:
-        # Для экспорта "сегодняшней" смены используем функцию для интерактивных запросов
         start_time, end_time, shift_name = get_shift_time_range()
         start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
         end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -378,6 +360,7 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
 
     user_service_counts = defaultdict(lambda: defaultdict(int))
     user_info_map = {}
+    user_total_counts = defaultdict(int) # Для общего количества по пользователю
 
     for record in records:
         service = record[2]
@@ -388,29 +371,60 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
         display_name = fullname if fullname else (f"@{username}" if username else f"ID: {user_id}")
         
         user_service_counts[user_id][service] += 1
+        user_total_counts[user_id] += 1 # Увеличиваем общий счетчик для пользователя
         if user_id not in user_info_map:
             user_info_map[user_id] = display_name
 
     sorted_user_ids = sorted(user_service_counts.keys(), key=lambda user_id: user_info_map[user_id].lower())
 
+    # Добавляем данные в сводную таблицу
     for user_id in sorted_user_ids:
         user_display_name = user_info_map[user_id]
         services_data = user_service_counts[user_id]
         
+        # Добавляем строку для текущего пользователя, объединяя ячейки для имени
+        current_row_start = ws_summary.max_row + 1
+        ws_summary.append([user_display_name, None, None]) # Добавляем имя пользователя
+        # Объединяем ячейки A:B для имени пользователя
+        ws_summary.merge_cells(start_row=current_row_start, start_column=1, end_row=current_row_start, end_column=2)
+        
+        # Применяем жирный шрифт и выравнивание для имени пользователя
+        ws_summary.cell(row=current_row_start, column=1).font = Font(bold=True)
+        ws_summary.cell(row=current_row_start, column=1).alignment = Alignment(horizontal='left') # Выравнивание по левому краю
+
         for service, count in sorted(services_data.items()):
-            ws_summary.append([user_display_name, service, count])
+            ws_summary.append(["", service, count]) # Пустая строка для первой колонки
+            
+        # Добавляем итоговую строку для пользователя
+        total_user_count = user_total_counts[user_id]
+        total_row_start = ws_summary.max_row + 1
+        ws_summary.append([f"Итого по {user_display_name}", "", total_user_count])
+        ws_summary.merge_cells(start_row=total_row_start, start_column=1, end_row=total_row_start, end_column=2)
+        ws_summary.cell(row=total_row_start, column=1).font = Font(bold=True)
+        ws_summary.cell(row=total_row_start, column=1).alignment = Alignment(horizontal='right') # Выравнивание по правому краю
+        ws_summary.cell(row=total_row_start, column=3).font = Font(bold=True)
+
+        # Добавляем пустую строку как разделитель между пользователями, если это не последний пользователь
+        if user_id != sorted_user_ids[-1]:
+            ws_summary.append([]) # Пустая строка
+
+    # Автонастройка ширины столбцов на листе "Сводка"
+    # Пересчитываем для трех столбцов: Пользователь, Сервис, Количество
+    column_widths = [0] * 3 # Инициализируем ширину для 3х столбцов
+    for row in ws_summary.iter_rows():
+        for i, cell in enumerate(row):
+            if i < 3: # Учитываем только первые три столбца
+                try:
+                    if cell.value:
+                        length = len(str(cell.value))
+                        if length > column_widths[i]:
+                            column_widths[i] = length
+                except:
+                    pass
     
-    for col in ws_summary.columns:
-        max_length = 0
-        column_letter = col[0].column_letter
-        for cell in col:
-            try:
-                if cell.value:
-                    max_length = max(max_length, len(str(cell.value)))
-            except:
-                pass
-        adjusted_width = (max_length + 2) * 1.2
-        ws_summary.column_dimensions[column_letter].width = adjusted_width
+    for i, width in enumerate(column_widths):
+        ws_summary.column_dimensions[get_column_letter(i + 1)].width = (width + 2) * 1.2
+
 
     buffer = BytesIO()
     wb.save(buffer)
@@ -497,7 +511,6 @@ async def handle_unsupported_content(message: types.Message):
         await message.reply("Извините, я могу обрабатывать только текстовые сообщения и фотографии (с подписями). "
                             "Видео, документы и другие файлы я не поддерживаю.")
 
-# --- НОВАЯ ФУНКЦИЯ ДЛЯ ОТПРАВКИ ОТЧЕТА ПО РАСПИСАНИЮ ---
 async def send_scheduled_report(shift_type: str):
     logging.info(f"Запуск отправки автоматического отчета для {shift_type} смены.")
     
@@ -531,16 +544,17 @@ async def send_scheduled_report(shift_type: str):
         
         for chat_id in REPORT_CHAT_IDS:
             try:
+                # Важно: для каждого получателя отправляем новый InputFile
+                # Потому что BytesIO-объект "расходуется" при отправке.
+                # Поэтому мы делаем seek(0) после каждого использования.
+                excel_file.seek(0) 
                 await bot.send_document(chat_id, types.InputFile(excel_file, filename=filename), caption=caption)
                 logging.info(f"Отправлен Excel отчет за {shift_name} в чат {chat_id}.")
-                # Сброс буфера для следующей отправки (если групп несколько)
-                excel_file.seek(0)
             except Exception as e:
                 logging.error(f"Ошибка отправки Excel файла в чат {chat_id}: {e}", exc_info=True)
 
     except Exception as e:
         logging.error(f"Произошла общая ошибка при формировании или отправке Excel отчета: {e}", exc_info=True)
-        # Уведомляем администраторов, если не удалось отправить отчет
         for admin_id in ADMIN_IDS:
             try:
                 await bot.send_message(admin_id, f"Ошибка при формировании/отправке отчета за {shift_name}: {e}")
@@ -548,7 +562,6 @@ async def send_scheduled_report(shift_type: str):
                 logging.error(f"Не удалось отправить уведомление об ошибке администратору {admin_id}: {err}")
 
 
-# --- Функции запуска/остановки бота и планировщика ---
 async def on_startup(dispatcher: Dispatcher):
     global db_executor
     db_executor = ThreadPoolExecutor(max_workers=5)
@@ -556,16 +569,12 @@ async def on_startup(dispatcher: Dispatcher):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(db_executor, init_db)
     
-    # Инициализация и запуск планировщика
     global scheduler
-    scheduler = AsyncIOScheduler(timezone=str(TIMEZONE)) # Указываем таймзону для планировщика
+    scheduler = AsyncIOScheduler(timezone=str(TIMEZONE))
     
-    # Планируем задачу для конца утренней смены (в 15:00 каждый день)
     scheduler.add_job(send_scheduled_report, 'cron', hour=15, minute=0, timezone=str(TIMEZONE), args=['morning'])
     logging.info("Задача для отправки утреннего отчета (в 15:00) запланирована.")
     
-    # Планируем задачу для конца вечерней смены (в 23:00 каждый день)
-    # Отчет будет включать данные до 04:00 следующего дня, но запускается в 23:00
     scheduler.add_job(send_scheduled_report, 'cron', hour=23, minute=0, timezone=str(TIMEZONE), args=['evening'])
     logging.info("Задача для отправки вечернего отчета (в 23:00) запланирована.")
     
@@ -590,7 +599,7 @@ async def on_shutdown(dispatcher: Dispatcher):
     
     global scheduler
     if scheduler:
-        scheduler.shutdown() # Корректное завершение планировщика
+        scheduler.shutdown()
         logging.info("APScheduler остановлен.")
         
     logging.info("Пул потоков БД остановлен.")
