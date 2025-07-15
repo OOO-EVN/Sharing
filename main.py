@@ -400,11 +400,14 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
     if not text_to_process.strip():
         await message.reply("Сообщение пустое. Пожалуйста, отправьте номер самоката или `сервис количество`.")
         return False
+
     user = message.from_user
     now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
     records_to_insert = []
     accepted_summary = defaultdict(int)
     text_for_numbers = text_to_process
+
+    # Пакетный прием
     batch_matches = BATCH_QUANTITY_PATTERN.findall(text_to_process)
     if batch_matches:
         logging.info(f"Найдены пакетные совпадения: {batch_matches}")
@@ -426,9 +429,8 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
         text_for_numbers = BATCH_QUANTITY_PATTERN.sub('', text_to_process)
     else:
         logging.info("Пакетных совпадений не найдено.")
-    logging.debug(f"Yandex matches: {YANDEX_SCOOTER_PATTERN.findall(text_for_numbers)}")
-    logging.debug(f"Whoosh matches: {WOOSH_SCOOTER_PATTERN.findall(text_for_numbers)}")
-    logging.debug(f"Jet matches: {JET_SCOOTER_PATTERN.findall(text_for_numbers)}")
+
+    # Одиночные номера самокатов
     patterns = {
         "Яндекс": YANDEX_SCOOTER_PATTERN,
         "Whoosh": WOOSH_SCOOTER_PATTERN,
@@ -447,11 +449,15 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
             records_to_insert.append((clean_num, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
             accepted_summary[service] += 1
             processed_numbers.add(clean_num)
-if not records_to_insert:
-    logging.info(f"records_to_insert пуст. Сообщение не распознано, но не отвечаем пользователю.")
-    return False
+
+    # Исправленный блок: не отправляем ошибку пользователю
+    if not records_to_insert:
+        logging.info(f"records_to_insert пуст. Сообщение не распознано, но не отвечаем пользователю.")
+        return False
+
     logging.info(f"Найдено записей для вставки: {len(records_to_insert)}. Суммарно: {accepted_summary}")
     await db_write_batch(records_to_insert)
+
     response_parts = []
     user_mention = types.User.get_mention(user)
     total_accepted = sum(accepted_summary.values())
@@ -459,9 +465,9 @@ if not records_to_insert:
     for service, count in sorted(accepted_summary.items()):
         if count > 0:
             response_parts.append(f"  - <b>{service}</b>: {count} шт.")
+
     await message.reply("\n".join(response_parts))
     return True
-
 @dp.message_handler(IsAllowedChatFilter(), regexp=r'import\s+(asyncio|re|os|sqlite3)')
 async def handle_code_messages(message: types.Message):
     logging.warning(f"Code-like message detected from {message.from_user.id}: {message.text[:50]}...")
