@@ -15,6 +15,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.utils import executor
 from aiogram.dispatcher.filters import BoundFilter
+from aiogram.utils.exceptions import MessageIsTooLong # Импортируем исключение
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
@@ -197,9 +198,11 @@ async def today_stats_handler(message: types.Message):
 
     user_stats = defaultdict(lambda: defaultdict(int))
     user_info = {}
+    service_totals = defaultdict(int)  # ← Добавляем подсчёт по сервисам
 
     for service, user_id, username, fullname in records:
         user_stats[user_id][service] += 1
+        service_totals[service] += 1      # ← Считаем по сервисам
         if user_id not in user_info:
             user_info[user_id] = f"@{username}" if username else fullname
 
@@ -213,8 +216,26 @@ async def today_stats_handler(message: types.Message):
         for service, count in sorted(services.items()):
             response_parts.append(f"  - {service}: {count} шт.")
 
+    # Добавляем блок по каждому сервису
+    response_parts.append("\n<b>Итог по сервисам:</b>")
+    for service, count in sorted(service_totals.items()):
+        response_parts.append(f"<b>{service}</b>: {count} шт.")
+
     response_parts.append(f"\n<b>Общий итог за сегодня: {total_all_users} шт.</b>")
-    await message.answer("\n".join(response_parts))
+    
+    full_response_text = "\n".join(response_parts)
+
+    # Проверяем длину сообщения перед отправкой
+    # Максимальная длина сообщения в Telegram - 4096 символов
+    # Оставим запас, например, 3800 символов, чтобы учесть HTML-разметку и потенциальные изменения
+    if len(full_response_text) > 3800:
+        logging.warning(f"Сообщение со статистикой превышает лимит ({len(full_response_text)} символов).")
+        await message.answer(
+            "Статистика за сегодня слишком большая, чтобы отправить её в одном сообщении. "
+            "Пожалуйста, используйте команду /export_today_excel для получения полного отчета."
+        )
+    else:
+        await message.answer(full_response_text)
 
 @dp.message_handler(IsAdminFilter(), commands=["export_today_excel", "export_all_excel"])
 async def export_excel_handler(message: types.Message):
@@ -243,7 +264,6 @@ async def export_excel_handler(message: types.Message):
         
         logging.info(f"Попытка отправить Excel файл: {filename}, размер: {excel_file.getbuffer().nbytes} байт.")
         await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption="Ваш отчет готов.")
-        logging.info(f"Excel файл {filename} успешно отправлен.")
     except Exception as e:
         logging.error(f"Ошибка при отправке Excel файла: {e}", exc_info=True)
         await message.answer("Произошла ошибка при отправке отчета. Пожалуйста, свяжитесь с администратором.")
