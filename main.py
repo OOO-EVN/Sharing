@@ -19,9 +19,8 @@ from aiogram.utils.exceptions import MessageIsTooLong
 
 from dotenv import load_dotenv
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment # Импортируем Alignment для выравнивания
-from openpyxl.utils import get_column_letter # Для удобства работы с колонками
-from openpyxl.styles import PatternFill # Для заливки ячеек, если нужно
+from openpyxl.styles import Font, Alignment
+from openpyxl.utils import get_column_letter
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -328,21 +327,25 @@ async def export_excel_handler(message: types.Message):
 
 def create_excel_report(records: List[Tuple]) -> BytesIO:
     wb = Workbook()
-    ws = wb.active
-    ws.title = "Данные"
+    
+    # --- ЛИСТ "ВСЕ ДАННЫЕ" ---
+    # Этот лист остается для просмотра всех записей подряд
+    ws_all_data = wb.active
+    ws_all_data.title = "Все данные"
 
-    headers = ["ID", "Номер Самоката", "Сервис", "ID Пользователя", "Ник", "Полное имя", "Время Принятия", "ID Чата"]
-    ws.append(headers)
+    headers_all_data = ["ID", "Номер Самоката", "Сервис", "ID Пользователя", "Ник", "Полное имя", "Время Принятия", "ID Чата"]
+    ws_all_data.append(headers_all_data)
     header_font = Font(bold=True)
-    for cell in ws[1]:
+    for cell in ws_all_data[1]:
         cell.font = header_font
 
     for row in records:
-        ws.append(row)
+        ws_all_data.append(row)
 
-    for col in ws.columns:
+    # Автонастройка ширины столбцов на листе "Все данные"
+    for col_idx, col in enumerate(ws_all_data.columns):
         max_length = 0
-        column_letter = col[0].column_letter
+        column_letter = get_column_letter(col_idx + 1)
         for cell in col:
             try:
                 if cell.value:
@@ -350,82 +353,142 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
             except:
                 pass
         adjusted_width = (max_length + 2) * 1.2
-        ws.column_dimensions[column_letter].width = adjusted_width
+        ws_all_data.column_dimensions[column_letter].width = adjusted_width
 
-    ws_summary = wb.create_sheet("Сводка")
-    summary_headers = ["Пользователь", "Сервис", "Количество"]
-    ws_summary.append(summary_headers)
-    for cell in ws_summary[1]:
+    # --- ЛИСТ "ИТОГИ" (сводка по всем пользователям) ---
+    # Этот лист будет содержать общую сводку по всем пользователям
+    ws_totals = wb.create_sheet("Итоги")
+    totals_headers = ["Пользователь", "Всего Самокатов"]
+    ws_totals.append(totals_headers)
+    for cell in ws_totals[1]:
         cell.font = header_font
 
-    user_service_counts = defaultdict(lambda: defaultdict(int))
-    user_info_map = {}
-    user_total_counts = defaultdict(int) # Для общего количества по пользователю
+    user_total_counts_summary = defaultdict(int)
+    user_info_map_summary = {} # Для отображаемых имен пользователей
 
     for record in records:
-        service = record[2]
         user_id = record[3]
         username = record[4]
         fullname = record[5]
-        
+        display_name = fullname if fullname else (f"@{username}" if username else f"ID: {user_id}")
+        user_total_counts_summary[user_id] += 1
+        user_info_map_summary[user_id] = display_name
+
+    sorted_user_ids_summary = sorted(user_total_counts_summary.keys(), key=lambda user_id: user_info_map_summary[user_id].lower())
+
+    for user_id in sorted_user_ids_summary:
+        user_display_name = user_info_map_summary[user_id]
+        total_count = user_total_counts_summary[user_id]
+        ws_totals.append([user_display_name, total_count])
+        # Выделяем жирным
+        ws_totals.cell(row=ws_totals.max_row, column=1).font = Font(bold=True)
+        ws_totals.cell(row=ws_totals.max_row, column=2).font = Font(bold=True)
+
+    # Автонастройка ширины столбцов на листе "Итоги"
+    for col_idx, col in enumerate(ws_totals.columns):
+        max_length = 0
+        column_letter = get_column_letter(col_idx + 1)
+        for cell in col:
+            try:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            except:
+                pass
+        adjusted_width = (max_length + 2) * 1.2
+        ws_totals.column_dimensions[column_letter].width = adjusted_width
+
+    # --- ОТДЕЛЬНЫЕ ЛИСТЫ ДЛЯ КАЖДОГО ПОЛЬЗОВАТЕЛЯ ---
+    user_records = defaultdict(list)
+    user_info_for_sheets = {}
+
+    for record in records:
+        user_id = record[3]
+        username = record[4]
+        fullname = record[5]
         display_name = fullname if fullname else (f"@{username}" if username else f"ID: {user_id}")
         
-        user_service_counts[user_id][service] += 1
-        user_total_counts[user_id] += 1 # Увеличиваем общий счетчик для пользователя
-        if user_id not in user_info_map:
-            user_info_map[user_id] = display_name
+        user_records[user_id].append(record)
+        if user_id not in user_info_for_sheets:
+            user_info_for_sheets[user_id] = display_name
 
-    sorted_user_ids = sorted(user_service_counts.keys(), key=lambda user_id: user_info_map[user_id].lower())
+    sorted_user_ids = sorted(user_records.keys(), key=lambda user_id: user_info_for_sheets[user_id].lower())
 
-    # Добавляем данные в сводную таблицу
+    user_sheet_headers = ["ID", "Номер Самоката", "Сервис", "Время Принятия", "ID Чата"] # Заголовки для листов пользователей
+
     for user_id in sorted_user_ids:
-        user_display_name = user_info_map[user_id]
-        services_data = user_service_counts[user_id]
+        user_display_name = user_info_for_sheets[user_id]
+        # Telegram username может быть длиной до 32 символов.
+        # Имя листа в Excel не может превышать 31 символ и не может содержать некоторые спец. символы.
+        # Очищаем имя для листа
+        sheet_name_raw = f"{user_display_name[:25].replace('@', '')}" # Обрезаем и убираем @
+        # Удаляем недопустимые символы для имени листа
+        invalid_chars = re.compile(r'[\\/:*?"<>|]')
+        sheet_name = invalid_chars.sub('', sheet_name_raw)
         
-        # Добавляем строку для текущего пользователя, объединяя ячейки для имени
-        current_row_start = ws_summary.max_row + 1
-        ws_summary.append([user_display_name, None, None]) # Добавляем имя пользователя
-        # Объединяем ячейки A:B для имени пользователя
-        ws_summary.merge_cells(start_row=current_row_start, start_column=1, end_row=current_row_start, end_column=2)
+        # Добавляем префикс ID, если после очистки имя пустое или слишком короткое,
+        # или если оно совпадает с уже существующим листом (крайне маловероятно после обработки)
+        if not sheet_name or len(sheet_name) < 3: # Если имя слишком короткое после очистки
+             sheet_name = f"ID{user_id}"
         
-        # Применяем жирный шрифт и выравнивание для имени пользователя
-        ws_summary.cell(row=current_row_start, column=1).font = Font(bold=True)
-        ws_summary.cell(row=current_row_start, column=1).alignment = Alignment(horizontal='left') # Выравнивание по левому краю
+        # Убедимся, что имя листа уникально (если вдруг совпадения по коротким именам)
+        original_sheet_name = sheet_name
+        counter = 1
+        while sheet_name in wb.sheetnames:
+            sheet_name = f"{original_sheet_name[:28]}{counter}" # Добавляем счетчик, чтобы не превысить 31 символ
+            counter += 1
 
-        for service, count in sorted(services_data.items()):
-            ws_summary.append(["", service, count]) # Пустая строка для первой колонки
-            
-        # Добавляем итоговую строку для пользователя
-        total_user_count = user_total_counts[user_id]
-        total_row_start = ws_summary.max_row + 1
-        ws_summary.append([f"Итого по {user_display_name}", "", total_user_count])
-        ws_summary.merge_cells(start_row=total_row_start, start_column=1, end_row=total_row_start, end_column=2)
-        ws_summary.cell(row=total_row_start, column=1).font = Font(bold=True)
-        ws_summary.cell(row=total_row_start, column=1).alignment = Alignment(horizontal='right') # Выравнивание по правому краю
-        ws_summary.cell(row=total_row_start, column=3).font = Font(bold=True)
+        ws_user = wb.create_sheet(title=sheet_name)
+        
+        ws_user.append(user_sheet_headers)
+        for cell in ws_user[1]:
+            cell.font = header_font
 
-        # Добавляем пустую строку как разделитель между пользователями, если это не последний пользователь
-        if user_id != sorted_user_ids[-1]:
-            ws_summary.append([]) # Пустая строка
+        current_user_total = 0
+        user_service_breakdown = defaultdict(int) # Для статистики по сервисам на листе пользователя
 
-    # Автонастройка ширины столбцов на листе "Сводка"
-    # Пересчитываем для трех столбцов: Пользователь, Сервис, Количество
-    column_widths = [0] * 3 # Инициализируем ширину для 3х столбцов
-    for row in ws_summary.iter_rows():
-        for i, cell in enumerate(row):
-            if i < 3: # Учитываем только первые три столбца
+        # Записи для текущего пользователя
+        for record in user_records[user_id]:
+            # Отфильтровываем user_id, username, fullname, chat_id (дублируются в названии листа)
+            # Структура record: ID, Номер Самоката, Сервис, ID Пользователя, Ник, Полное имя, Время Принятия, ID Чата
+            # Новая строка: ID, Номер Самоката, Сервис, Время Принятия, ID Чата
+            row_to_add = [record[0], record[1], record[2], record[6], record[7]]
+            ws_user.append(row_to_add)
+            current_user_total += 1
+            user_service_breakdown[record[2]] += 1 # Считаем по сервисам для этого пользователя
+
+        # Добавляем итоговую информацию в конце листа пользователя
+        ws_user.append([]) # Пустая строка для разделения
+        
+        ws_user.append(["Статистика по сервисам:"])
+        ws_user.cell(row=ws_user.max_row, column=1).font = Font(bold=True)
+        ws_user.merge_cells(start_row=ws_user.max_row, start_column=1, end_row=ws_user.max_row, end_column=2)
+
+        for service, count in sorted(user_service_breakdown.items()):
+            ws_user.append([service, count])
+
+        ws_user.append([]) # Еще одна пустая строка
+        
+        ws_user.append(["Всего принято:", current_user_total])
+        ws_user.cell(row=ws_user.max_row, column=1).font = Font(bold=True)
+        ws_user.cell(row=ws_user.max_row, column=2).font = Font(bold=True)
+        ws_user.cell(row=ws_user.max_row, column=1).alignment = Alignment(horizontal='right')
+        ws_user.cell(row=ws_user.max_row, column=2).alignment = Alignment(horizontal='center')
+
+        # Автонастройка ширины столбцов на листе пользователя
+        for col_idx, col in enumerate(ws_user.columns):
+            max_length = 0
+            column_letter = get_column_letter(col_idx + 1)
+            for cell in col:
                 try:
                     if cell.value:
                         length = len(str(cell.value))
-                        if length > column_widths[i]:
-                            column_widths[i] = length
+                        if length > max_length:
+                            max_length = length
                 except:
                     pass
-    
-    for i, width in enumerate(column_widths):
-        ws_summary.column_dimensions[get_column_letter(i + 1)].width = (width + 2) * 1.2
-
-
+            adjusted_width = (max_length + 2) * 1.2
+            ws_user.column_dimensions[column_letter].width = adjusted_width
+            
     buffer = BytesIO()
     wb.save(buffer)
     buffer.seek(0)
@@ -544,9 +607,6 @@ async def send_scheduled_report(shift_type: str):
         
         for chat_id in REPORT_CHAT_IDS:
             try:
-                # Важно: для каждого получателя отправляем новый InputFile
-                # Потому что BytesIO-объект "расходуется" при отправке.
-                # Поэтому мы делаем seek(0) после каждого использования.
                 excel_file.seek(0) 
                 await bot.send_document(chat_id, types.InputFile(excel_file, filename=filename), caption=caption)
                 logging.info(f"Отправлен Excel отчет за {shift_name} в чат {chat_id}.")
