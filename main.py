@@ -561,7 +561,78 @@ async def handle_text_messages(message: types.Message):
     if message.text.startswith('/'):
         return
     await process_scooter_text(message, message.text)
+@dp.message_handler(IsAdminFilter(), commands=["service_report"])
+async def service_report_handler(message: types.Message):
+    args = message.get_args().split()
+    if len(args) != 2:
+        await message.reply(
+            "Используйте: /service_report <начало> <конец>\n"
+            "Пример: /service_report 2024-07-15 2024-07-25"
+        )
+        return
 
+    start_date_str, end_date_str = args
+    try:
+        start_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
+        end_date = datetime.datetime.strptime(end_date_str, "%Y-%m-%d").date()
+    except Exception:
+        await message.reply("Некорректный формат даты. Дата должна быть в YYYY-MM-DD.")
+        return
+
+    report_lines = []
+    total_all = 0
+    total_service = defaultdict(int)
+
+    for cur_date in (start_date + datetime.timedelta(n) for n in range((end_date - start_date).days + 1)):
+        # Утренняя смена
+        morning_start = TIMEZONE.localize(datetime.datetime.combine(cur_date, datetime.time(7, 0, 0)))
+        morning_end = TIMEZONE.localize(datetime.datetime.combine(cur_date, datetime.time(15, 0, 0)))
+        morning_query = "SELECT service FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
+        morning_records = await db_fetch_all(morning_query, (morning_start.strftime("%Y-%m-%d %H:%M:%S"), morning_end.strftime("%Y-%m-%d %H:%M:%S")))
+        morning_services = defaultdict(int)
+        for (service,) in morning_records:
+            morning_services[service] += 1
+            total_service[service] += 1
+            total_all += 1
+
+        # Вечерняя смена (с учетом ночи)
+        even_start = TIMEZONE.localize(datetime.datetime.combine(cur_date, datetime.time(15, 0, 0)))
+        even_end = TIMEZONE.localize(datetime.datetime.combine(cur_date + datetime.timedelta(days=1), datetime.time(4, 0, 0)))
+        even_query = "SELECT service FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
+        even_records = await db_fetch_all(even_query, (even_start.strftime("%Y-%m-%d %H:%M:%S"), even_end.strftime("%Y-%m-%d %H:%M:%S")))
+        even_services = defaultdict(int)
+        for (service,) in even_records:
+            even_services[service] += 1
+            total_service[service] += 1
+            total_all += 1
+
+        # Формируем строки по дням
+        date_str = cur_date.strftime("%d.%m")
+        report_lines.append(f"<b>{date_str}</b>")
+        report_lines.append("Утренняя смена:")
+        for service, count in sorted(morning_services.items()):
+            report_lines.append(f"{service}: {count} шт.")
+        report_lines.append("Вечерняя смена:")
+        for service, count in sorted(even_services.items()):
+            report_lines.append(f"{service}: {count} шт.")
+        report_lines.append("")  # пустая строка-разделитель
+
+    # Итог по всему периоду
+    report_lines.append("<b>Итог по сервисам за период:</b>")
+    for service, count in sorted(total_service.items()):
+        report_lines.append(f"{service}: {count} шт.")
+    report_lines.append(f"\n<b>Общий итог: {total_all} шт.</b>")
+
+    # Отправляем по частям, если превышает лимит
+    MESSAGE_LIMIT = 4000
+    buffer = []
+    for line in report_lines:
+        if len('\n'.join(buffer)) + len(line) + 1 > MESSAGE_LIMIT:
+            await message.answer('\n'.join(buffer))
+            buffer = []
+        buffer.append(line)
+    if buffer:
+        await message.answer('\n'.join(buffer))
 @dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.PHOTO)
 async def handle_photo_messages(message: types.Message):
     if message.caption:
@@ -647,6 +718,7 @@ async def on_startup(dispatcher: Dispatcher):
         types.BotCommand(command="today_stats", description="Статистика за текущую смену"),
         types.BotCommand(command="export_today_excel", description="Экспорт Excel за текущую смену"),
         types.BotCommand(command="export_all_excel", description="Экспорт Excel за все время"),
+        types.BotCommand(command="service_report", description="Отчет по сервисам за период"),
         types.BotCommand(command="batch_accept", description="Пакетный прием (сервис кол-во)"),
     ]
     await dispatcher.bot.set_my_commands(admin_commands)
