@@ -539,7 +539,6 @@ async def handle_text_messages(message: types.Message):
     if message.text.startswith('/'):
         return
     await process_scooter_text(message, message.text)
-
 @dp.message_handler(IsAdminFilter(), commands=["service_report"])
 async def service_report_handler(message: types.Message):
     logging.info(f"Получена команда /service_report от user_id={message.from_user.id}, args={message.get_args()}")
@@ -555,8 +554,8 @@ async def service_report_handler(message: types.Message):
     start_date_str, end_date_str = args
     logging.info(f"Попытка обработки дат: {start_date_str} - {end_date_str}")
     try:
-        start_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
-        end_date = datetime.datetime.strptime(end_date_str, "%Y-%m-%d").date()
+        start_date = TIMEZONE.localize(datetime.datetime.strptime(start_date_str, "%Y-%m-%d"))
+        end_date = TIMEZONE.localize(datetime.datetime.strptime(end_date_str, "%Y-%m-%d") + datetime.timedelta(days=1))
         logging.info(f"Даты успешно обработаны: {start_date} - {end_date}")
     except Exception as e:
         logging.error(f"Ошибка формата даты: {e}")
@@ -567,13 +566,19 @@ async def service_report_handler(message: types.Message):
     total_all = 0
     total_service = defaultdict(int)
 
-    for cur_date in (start_date + datetime.timedelta(n) for n in range((end_date - start_date).days + 1)):
-        logging.info(f"Обработка даты {cur_date}")
-        morning_start = TIMEZONE.localize(datetime.datetime.combine(cur_date, datetime.time(7, 0, 0)))
-        morning_end = TIMEZONE.localize(datetime.datetime.combine(cur_date, datetime.time(15, 0, 0)))
+    current_date = start_date
+    while current_date <= end_date:
+        logging.info(f"Обработка даты {current_date.strftime('%Y-%m-%d')}")
+        
+        # Утренняя смена (7:00-15:00)
+        morning_start = TIMEZONE.localize(datetime.datetime.combine(current_date.date(), datetime.time(7, 0, 0)))
+        morning_end = TIMEZONE.localize(datetime.datetime.combine(current_date.date(), datetime.time(15, 0, 0)))
+        
         morning_query = "SELECT service FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
+        logging.info(f"Утренний запрос: {morning_query} ({morning_start} - {morning_end})")
+        
         morning_records = await db_fetch_all(morning_query, (morning_start.strftime("%Y-%m-%d %H:%M:%S"), morning_end.strftime("%Y-%m-%d %H:%M:%S")))
-        logging.info(f"Утренние записи для {cur_date}: {len(morning_records)}")
+        logging.info(f"Найдено утренних записей: {len(morning_records)}")
 
         morning_services = defaultdict(int)
         for (service,) in morning_records:
@@ -581,11 +586,15 @@ async def service_report_handler(message: types.Message):
             total_service[service] += 1
             total_all += 1
 
-        even_start = TIMEZONE.localize(datetime.datetime.combine(cur_date, datetime.time(15, 0, 0)))
-        even_end = TIMEZONE.localize(datetime.datetime.combine(cur_date + datetime.timedelta(days=1), datetime.time(4, 0, 0)))
-        even_query = "SELECT service FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
-        even_records = await db_fetch_all(even_query, (even_start.strftime("%Y-%m-%d %H:%M:%S"), even_end.strftime("%Y-%m-%d %H:%M:%S")))
-        logging.info(f"Вечерние записи для {cur_date}: {len(even_records)}")
+        # Вечерняя смена (15:00-4:00 следующего дня)
+        evening_start = TIMEZONE.localize(datetime.datetime.combine(current_date.date(), datetime.time(15, 0, 0)))
+        evening_end = TIMEZONE.localize(datetime.datetime.combine(current_date.date() + datetime.timedelta(days=1), datetime.time(4, 0, 0)))
+        
+        evening_query = "SELECT service FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
+        logging.info(f"Вечерний запрос: {evening_query} ({evening_start} - {evening_end})")
+        
+        even_records = await db_fetch_all(evening_query, (evening_start.strftime("%Y-%m-%d %H:%M:%S"), evening_end.strftime("%Y-%m-%d %H:%M:%S")))
+        logging.info(f"Найдено вечерних записей: {len(even_records)}")
 
         even_services = defaultdict(int)
         for (service,) in even_records:
@@ -593,15 +602,17 @@ async def service_report_handler(message: types.Message):
             total_service[service] += 1
             total_all += 1
 
-        date_str = cur_date.strftime("%d.%m")
+        date_str = current_date.strftime("%d.%m")
         report_lines.append(f"<b>{date_str}</b>")
-        report_lines.append("Утренняя смена:")
+        report_lines.append("Утренняя смена (7:00-15:00):")
         for service, count in sorted(morning_services.items()):
             report_lines.append(f"{service}: {count} шт.")
-        report_lines.append("Вечерняя смена:")
+        report_lines.append("Вечерняя смена (15:00-4:00):")
         for service, count in sorted(even_services.items()):
             report_lines.append(f"{service}: {count} шт.")
         report_lines.append("")
+
+        current_date += datetime.timedelta(days=1)
 
     report_lines.append("<b>Итог по сервисам за период:</b>")
     for service, count in sorted(total_service.items()):
@@ -610,19 +621,19 @@ async def service_report_handler(message: types.Message):
 
     report_text = '\n'.join(report_lines)
     logging.info(f"Отчет сформирован, строк: {len(report_lines)}, символов: {len(report_text)}")
+    
+    # Разбивка длинных сообщений
     MESSAGE_LIMIT = 4000
     buffer = []
     for line in report_lines:
-        buffer_text = '\n'.join(buffer)
-        if len(buffer_text) + len(line) + 1 > MESSAGE_LIMIT:
-            logging.info(f"Отправка части отчета: {len(buffer_text)} символов")
-            await message.answer(buffer_text)
+        if len('\n'.join(buffer + [line])) > MESSAGE_LIMIT:
+            await message.answer('\n'.join(buffer))
             buffer = []
         buffer.append(line)
+    
     if buffer:
-        buffer_text = '\n'.join(buffer)
-        logging.info(f"Отправка последней части отчета: {len(buffer_text)} символов")
-        await message.answer(buffer_text)
+        await message.answer('\n'.join(buffer))
+
 
 @dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.PHOTO)
 async def handle_photo_messages(message: types.Message):
