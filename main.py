@@ -33,14 +33,14 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN не найден в .env файле. Пожалуйста, добавьте его.")
+    raise ValueError("BOT_TOKEN не найден в .env файле.")
 
 try:
     ADMIN_IDS = {int(admin_id) for admin_id in os.getenv('ADMIN_IDS', '').split(',') if admin_id.strip()}
     ALLOWED_CHAT_IDS = {int(chat_id) for chat_id in os.getenv('ALLOWED_CHAT_IDS', '').split(',') if chat_id.strip()}
     REPORT_CHAT_IDS = {int(chat_id) for chat_id in os.getenv('REPORT_CHAT_IDS', '').split(',') if chat_id.strip()}
 except ValueError:
-    logging.error("Не удалось прочитать ADMIN_IDS, ALLOWED_CHAT_IDS или REPORT_CHAT_IDS. Убедитесь, что они являются числами, разделенными запятыми.")
+    logging.error("Не удалось прочитать ADMIN_IDS, ALLOWED_CHAT_IDS или REPORT_CHAT_IDS.")
     ADMIN_IDS = set()
     ALLOWED_CHAT_IDS = set()
     REPORT_CHAT_IDS = set()
@@ -69,9 +69,7 @@ scheduler = None
 
 class IsAdminFilter(BoundFilter):
     async def check(self, message: types.Message) -> bool:
-        is_admin = message.from_user.id in ADMIN_IDS
-        logging.info(f"Проверка IsAdminFilter: user_id={message.from_user.id}, is_admin={is_admin}, chat_id={message.chat.id}")
-        return is_admin
+        return message.from_user.id in ADMIN_IDS
 
 class IsAllowedChatFilter(BoundFilter):
     async def check(self, message: types.Message) -> bool:
@@ -79,7 +77,6 @@ class IsAllowedChatFilter(BoundFilter):
             return True
         if message.chat.type in ['group', 'supergroup'] and message.chat.id in ALLOWED_CHAT_IDS:
             return True
-        logging.warning(f"Сообщение от {message.from_user.id} в чате {message.chat.id} было заблокировано фильтром.")
         return False
 
 def run_db_query(query: str, params: tuple = (), fetch: str = None):
@@ -96,7 +93,7 @@ def run_db_query(query: str, params: tuple = (), fetch: str = None):
             return cursor.fetchall()
         return cursor.lastrowid
     except sqlite3.Error as e:
-        logging.error(f"Ошибка базы данных: {e}\nЗапрос: {query}")
+        logging.error(f"Ошибка базы данных: {e}")
         return None
     finally:
         if conn:
@@ -117,7 +114,6 @@ def init_db():
     ''')
     run_db_query("CREATE INDEX IF NOT EXISTS idx_timestamp ON accepted_scooters (timestamp);")
     run_db_query("CREATE INDEX IF NOT EXISTS idx_user_service ON accepted_scooters (accepted_by_user_id, service);")
-    logging.info("База данных успешно инициализирована.")
 
 def insert_batch_records(records_data: List[Tuple]):
     conn = None
@@ -151,8 +147,8 @@ async def command_start_handler(message: types.Message):
     allowed_chats_info = ', '.join(map(str, ALLOWED_CHAT_IDS)) if ALLOWED_CHAT_IDS else "не указаны"
     response = (
         f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
-        f"Просто отправь мне **номер самоката текстом** или **фотографию с номером в подписи**.\n"
-        f"Для пакетного приёма используй формат: `сервис количество` (например, `Яндекс 10`, `y 5`, `Whoosh 15`, `w 20`, `Jet 8`, `j 3`).\n\n"
+        f"Просто отправь мне номер самоката текстом или фотографию с номером в подписи.\n"
+        f"Для пакетного приёма используй формат: `сервис количество`.\n\n"
         f"Я работаю в группах с ID: `{allowed_chats_info}` и в личных сообщениях с администраторами.\n"
         f"Твой ID чата: `{message.chat.id}`"
     )
@@ -162,7 +158,7 @@ async def command_start_handler(message: types.Message):
 async def batch_accept_handler(message: types.Message):
     args = message.get_args().split()
     if len(args) != 2:
-        await message.reply("Используйте: `/batch_accept <сервис> <количество>`\nПример: `/batch_accept Yandex 20` или `/batch_accept y 20`", parse_mode="Markdown")
+        await message.reply("Используйте: `/batch_accept <сервис> <количество>`", parse_mode="Markdown")
         return
 
     service_raw, quantity_str = args
@@ -193,25 +189,6 @@ async def batch_accept_handler(message: types.Message):
 
     user_mention = types.User.get_mention(user)
     await message.reply(f"{user_mention}, принято {quantity} самокатов сервиса <b>{service}</b>.")
-
-def get_shift_time_range_for_report(shift_type: str):
-    now = datetime.datetime.now(TIMEZONE)
-    today = now.date()
-    
-    if shift_type == 'morning':
-        start_time = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(7, 0, 0)))
-        end_time = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
-        shift_name = "утреннюю смену"
-    elif shift_type == 'evening':
-        evening_start_actual = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
-        evening_end_extended = TIMEZONE.localize(datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time(4, 0, 0)))
-        start_time = evening_start_actual
-        end_time = evening_end_extended
-        shift_name = "вечернюю смену (с учетом ночных часов)"
-    else:
-        return None, None, None
-        
-    return start_time, end_time, shift_name
 
 def get_shift_time_range():
     now = datetime.datetime.now(TIMEZONE)
@@ -313,23 +290,19 @@ async def export_excel_handler(message: types.Message):
 
     if not records:
         await message.answer(f"Нет данных для экспорта{date_filter_text}.")
-        logging.info(f"Нет данных для экспорта отчета{date_filter_text}.")
         return
 
     try:
         excel_file = create_excel_report(records)
         report_type = "shift" if is_today_shift else "full"
         filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
-        
-        logging.info(f"Попытка отправить Excel файл: {filename}, размер: {excel_file.getbuffer().nbytes} байт.")
         await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption=f"Ваш отчет{date_filter_text} готов.")
     except Exception as e:
-        logging.error(f"Ошибка при отправке Excel файла: {e}", exc_info=True)
-        await message.answer("Произошла ошибка при отправке отчета. Пожалуйста, свяжитесь с администратором.")
+        logging.error(f"Ошибка при отправке Excel файла: {e}")
+        await message.answer("Произошла ошибка при отправке отчета.")
 
 def create_excel_report(records: List[Tuple]) -> BytesIO:
     wb = Workbook()
-    
     ws_all_data = wb.active
     ws_all_data.title = "Все данные"
 
@@ -425,7 +398,6 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
             counter += 1
 
         ws_user = wb.create_sheet(title=sheet_name)
-        
         ws_user.append(user_sheet_headers)
         for cell in ws_user[1]:
             cell.font = header_font
@@ -539,26 +511,19 @@ async def handle_text_messages(message: types.Message):
     if message.text.startswith('/'):
         return
     await process_scooter_text(message, message.text)
+
 @dp.message_handler(IsAdminFilter(), commands=["service_report"])
 async def service_report_handler(message: types.Message):
-    logging.info(f"Получена команда /service_report от user_id={message.from_user.id}, args={message.get_args()}")
     args = message.get_args().split()
     if len(args) != 2:
-        logging.warning("Недостаточно аргументов для /service_report")
-        await message.reply(
-            "Используйте: /service_report <начало> <конец>\n"
-            "Пример: /service_report 2024-07-15 2024-07-25"
-        )
+        await message.reply("Используйте: /service_report <начало> <конец>\nПример: /service_report 2024-07-15 2024-07-25")
         return
 
     start_date_str, end_date_str = args
-    logging.info(f"Попытка обработки дат: {start_date_str} - {end_date_str}")
     try:
         start_date = TIMEZONE.localize(datetime.datetime.strptime(start_date_str, "%Y-%m-%d"))
         end_date = TIMEZONE.localize(datetime.datetime.strptime(end_date_str, "%Y-%m-%d") + datetime.timedelta(days=1))
-        logging.info(f"Даты успешно обработаны: {start_date} - {end_date}")
     except Exception as e:
-        logging.error(f"Ошибка формата даты: {e}")
         await message.reply("Некорректный формат даты. Дата должна быть в YYYY-MM-DD.")
         return
 
@@ -568,17 +533,11 @@ async def service_report_handler(message: types.Message):
 
     current_date = start_date
     while current_date <= end_date:
-        logging.info(f"Обработка даты {current_date.strftime('%Y-%m-%d')}")
-        
-        # Утренняя смена (7:00-15:00)
         morning_start = TIMEZONE.localize(datetime.datetime.combine(current_date.date(), datetime.time(7, 0, 0)))
         morning_end = TIMEZONE.localize(datetime.datetime.combine(current_date.date(), datetime.time(15, 0, 0)))
         
         morning_query = "SELECT service FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
-        logging.info(f"Утренний запрос: {morning_query} ({morning_start} - {morning_end})")
-        
         morning_records = await db_fetch_all(morning_query, (morning_start.strftime("%Y-%m-%d %H:%M:%S"), morning_end.strftime("%Y-%m-%d %H:%M:%S")))
-        logging.info(f"Найдено утренних записей: {len(morning_records)}")
 
         morning_services = defaultdict(int)
         for (service,) in morning_records:
@@ -586,15 +545,11 @@ async def service_report_handler(message: types.Message):
             total_service[service] += 1
             total_all += 1
 
-        # Вечерняя смена (15:00-4:00 следующего дня)
         evening_start = TIMEZONE.localize(datetime.datetime.combine(current_date.date(), datetime.time(15, 0, 0)))
         evening_end = TIMEZONE.localize(datetime.datetime.combine(current_date.date() + datetime.timedelta(days=1), datetime.time(4, 0, 0)))
         
         evening_query = "SELECT service FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
-        logging.info(f"Вечерний запрос: {evening_query} ({evening_start} - {evening_end})")
-        
         even_records = await db_fetch_all(evening_query, (evening_start.strftime("%Y-%m-%d %H:%M:%S"), evening_end.strftime("%Y-%m-%d %H:%M:%S")))
-        logging.info(f"Найдено вечерних записей: {len(even_records)}")
 
         even_services = defaultdict(int)
         for (service,) in even_records:
@@ -620,9 +575,6 @@ async def service_report_handler(message: types.Message):
     report_lines.append(f"\n<b>Общий итог: {total_all} шт.</b>")
 
     report_text = '\n'.join(report_lines)
-    logging.info(f"Отчет сформирован, строк: {len(report_lines)}, символов: {len(report_text)}")
-    
-    # Разбивка длинных сообщений
     MESSAGE_LIMIT = 4000
     buffer = []
     for line in report_lines:
@@ -634,7 +586,6 @@ async def service_report_handler(message: types.Message):
     if buffer:
         await message.answer('\n'.join(buffer))
 
-
 @dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.PHOTO)
 async def handle_photo_messages(message: types.Message):
     if message.caption:
@@ -645,16 +596,12 @@ async def handle_unsupported_content(message: types.Message):
     if message.text and message.text.startswith('/'):
         return
     if not (message.photo or (message.text and not message.text.startswith('/'))):
-        await message.reply("Извините, я могу обрабатывать только текстовые сообщения и фотографии (с подписями). "
-                            "Видео, документы и другие файлы я не поддерживаю.")
+        await message.reply("Извините, я могу обрабатывать только текстовые сообщения и фотографии (с подписями).")
 
 async def send_scheduled_report(shift_type: str):
-    logging.info(f"Запуск отправки автоматического отчета для {shift_type} смены.")
-    
     start_time, end_time, shift_name = get_shift_time_range_for_report(shift_type)
     
     if not start_time or not end_time:
-        logging.error(f"Не удалось определить временной диапазон для отчета '{shift_type}' смены.")
         return
 
     start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -668,9 +615,8 @@ async def send_scheduled_report(shift_type: str):
         for chat_id in REPORT_CHAT_IDS:
             try:
                 await bot.send_message(chat_id, message_text)
-                logging.info(f"Отправлено уведомление об отсутствии данных за {shift_name} в чат {chat_id}.")
-            except Exception as e:
-                logging.error(f"Ошибка отправки уведомления в чат {chat_id}: {e}")
+            except Exception:
+                pass
         return
 
     try:
@@ -681,19 +627,31 @@ async def send_scheduled_report(shift_type: str):
         
         for chat_id in REPORT_CHAT_IDS:
             try:
-                excel_file.seek(0) 
+                excel_file.seek(0)
                 await bot.send_document(chat_id, types.InputFile(excel_file, filename=filename), caption=caption)
-                logging.info(f"Отправлен Excel отчет за {shift_name} в чат {chat_id}.")
-            except Exception as e:
-                logging.error(f"Ошибка отправки Excel файла в чат {chat_id}: {e}", exc_info=True)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
-    except Exception as e:
-        logging.error(f"Произошла общая ошибка при формировании или отправке Excel отчета: {e}", exc_info=True)
-        for admin_id in ADMIN_IDS:
-            try:
-                await bot.send_message(admin_id, f"Ошибка при формировании/отправке отчета за {shift_name}: {e}")
-            except Exception as err:
-                logging.error(f"Не удалось отправить уведомление об ошибке администратору {admin_id}: {err}")
+def get_shift_time_range_for_report(shift_type: str):
+    now = datetime.datetime.now(TIMEZONE)
+    today = now.date()
+    
+    if shift_type == 'morning':
+        start_time = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(7, 0, 0)))
+        end_time = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
+        shift_name = "утреннюю смену"
+    elif shift_type == 'evening':
+        evening_start_actual = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
+        evening_end_extended = TIMEZONE.localize(datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time(4, 0, 0)))
+        start_time = evening_start_actual
+        end_time = evening_end_extended
+        shift_name = "вечернюю смену (с учетом ночных часов)"
+    else:
+        return None, None, None
+        
+    return start_time, end_time, shift_name
 
 async def on_startup(dispatcher: Dispatcher):
     global db_executor
@@ -706,13 +664,8 @@ async def on_startup(dispatcher: Dispatcher):
     scheduler = AsyncIOScheduler(timezone=str(TIMEZONE))
     
     scheduler.add_job(send_scheduled_report, 'cron', hour=15, minute=0, timezone=str(TIMEZONE), args=['morning'])
-    logging.info("Задача для отправки утреннего отчета (в 15:00) запланирована.")
-    
     scheduler.add_job(send_scheduled_report, 'cron', hour=23, minute=0, timezone=str(TIMEZONE), args=['evening'])
-    logging.info("Задача для отправки вечернего отчета (в 23:00) запланирована.")
-    
     scheduler.start()
-    logging.info("APScheduler запущен.")
     
     admin_commands = [
         types.BotCommand(command="start", description="Начало работы"),
@@ -723,7 +676,6 @@ async def on_startup(dispatcher: Dispatcher):
         types.BotCommand(command="batch_accept", description="Пакетный прием (сервис кол-во)"),
     ]
     await dispatcher.bot.set_my_commands(admin_commands)
-    logging.info("Бот запущен и команды установлены.")
 
 async def on_shutdown(dispatcher: Dispatcher):
     global db_executor
@@ -733,10 +685,6 @@ async def on_shutdown(dispatcher: Dispatcher):
     global scheduler
     if scheduler:
         scheduler.shutdown()
-        logging.info("APScheduler остановлен.")
-        
-    logging.info("Пул потоков БД остановлен.")
-    logging.info("Бот остановлен.")
 
 if __name__ == "__main__":
     executor.start_polling(dp, on_startup=on_startup, on_shutdown=on_shutdown, skip_updates=True)
