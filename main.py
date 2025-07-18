@@ -10,21 +10,24 @@ from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
 from typing import List, Tuple
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
-# Изменения для aiogram 2.x
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.utils import executor
 from aiogram.dispatcher.filters import BoundFilter
 from aiogram.utils.exceptions import MessageIsTooLong
-
 from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 from openpyxl.utils import get_column_letter
 
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('bot.log'),
+        logging.StreamHandler()
+    ]
+)
 
 load_dotenv()
 
@@ -43,7 +46,7 @@ except ValueError:
     REPORT_CHAT_IDS = set()
 
 DB_NAME = 'scooters.db'
-TIMEZONE = pytz.timezone('Asia/Almaty') # Ваша таймзона UTC+5
+TIMEZONE = pytz.timezone('Asia/Almaty')
 
 YANDEX_SCOOTER_PATTERN = re.compile(r'\b(\d{8})\b')
 WOOSH_SCOOTER_PATTERN = re.compile(r'\b([A-ZА-Я]{2}\d{4})\b', re.IGNORECASE)
@@ -66,7 +69,9 @@ scheduler = None
 
 class IsAdminFilter(BoundFilter):
     async def check(self, message: types.Message) -> bool:
-        return message.from_user.id in ADMIN_IDS
+        is_admin = message.from_user.id in ADMIN_IDS
+        logging.info(f"Проверка IsAdminFilter: user_id={message.from_user.id}, is_admin={is_admin}, chat_id={message.chat.id}")
+        return is_admin
 
 class IsAllowedChatFilter(BoundFilter):
     async def check(self, message: types.Message) -> bool:
@@ -200,7 +205,6 @@ def get_shift_time_range_for_report(shift_type: str):
     elif shift_type == 'evening':
         evening_start_actual = TIMEZONE.localize(datetime.datetime.combine(today, datetime.time(15, 0, 0)))
         evening_end_extended = TIMEZONE.localize(datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time(4, 0, 0)))
-        
         start_time = evening_start_actual
         end_time = evening_end_extended
         shift_name = "вечернюю смену (с учетом ночных часов)"
@@ -208,7 +212,6 @@ def get_shift_time_range_for_report(shift_type: str):
         return None, None, None
         
     return start_time, end_time, shift_name
-
 
 def get_shift_time_range():
     now = datetime.datetime.now(TIMEZONE)
@@ -234,7 +237,6 @@ def get_shift_time_range():
             if now.hour >= 23:
                 return evening_shift_start, evening_shift_end, "вечернюю смену"
             return morning_shift_start, morning_shift_end, "утреннюю смену (еще не началась)"
-
 
 @dp.message_handler(IsAdminFilter(), commands="today_stats")
 async def today_stats_handler(message: types.Message):
@@ -289,7 +291,6 @@ async def today_stats_handler(message: types.Message):
     if current_message_buffer:
         await message.answer("\n".join(current_message_buffer))
 
-
 @dp.message_handler(IsAdminFilter(), commands=["export_today_excel", "export_all_excel"])
 async def export_excel_handler(message: types.Message):
     is_today_shift = message.get_command() == '/export_today_excel'
@@ -329,8 +330,6 @@ async def export_excel_handler(message: types.Message):
 def create_excel_report(records: List[Tuple]) -> BytesIO:
     wb = Workbook()
     
-    # --- ЛИСТ "ВСЕ ДАННЫЕ" ---
-    # Этот лист остается для просмотра всех записей подряд
     ws_all_data = wb.active
     ws_all_data.title = "Все данные"
 
@@ -343,7 +342,6 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
     for row in records:
         ws_all_data.append(row)
 
-    # Автонастройка ширины столбцов на листе "Все данные"
     for col_idx, col in enumerate(ws_all_data.columns):
         max_length = 0
         column_letter = get_column_letter(col_idx + 1)
@@ -356,8 +354,6 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
         adjusted_width = (max_length + 2) * 1.2
         ws_all_data.column_dimensions[column_letter].width = adjusted_width
 
-    # --- ЛИСТ "ИТОГИ" (сводка по всем пользователям) ---
-    # Этот лист будет содержать общую сводку по всем пользователям
     ws_totals = wb.create_sheet("Итоги")
     totals_headers = ["Пользователь", "Всего Самокатов"]
     ws_totals.append(totals_headers)
@@ -365,7 +361,7 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
         cell.font = header_font
 
     user_total_counts_summary = defaultdict(int)
-    user_info_map_summary = {} # Для отображаемых имен пользователей
+    user_info_map_summary = {}
 
     for record in records:
         user_id = record[3]
@@ -381,11 +377,9 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
         user_display_name = user_info_map_summary[user_id]
         total_count = user_total_counts_summary[user_id]
         ws_totals.append([user_display_name, total_count])
-        # Выделяем жирным
         ws_totals.cell(row=ws_totals.max_row, column=1).font = Font(bold=True)
         ws_totals.cell(row=ws_totals.max_row, column=2).font = Font(bold=True)
 
-    # Автонастройка ширины столбцов на листе "Итоги"
     for col_idx, col in enumerate(ws_totals.columns):
         max_length = 0
         column_letter = get_column_letter(col_idx + 1)
@@ -398,7 +392,6 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
         adjusted_width = (max_length + 2) * 1.2
         ws_totals.column_dimensions[column_letter].width = adjusted_width
 
-    # --- ОТДЕЛЬНЫЕ ЛИСТЫ ДЛЯ КАЖДОГО ПОЛЬЗОВАТЕЛЯ ---
     user_records = defaultdict(list)
     user_info_for_sheets = {}
 
@@ -414,28 +407,21 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
 
     sorted_user_ids = sorted(user_records.keys(), key=lambda user_id: user_info_for_sheets[user_id].lower())
 
-    user_sheet_headers = ["ID", "Номер Самоката", "Сервис", "Время Принятия", "ID Чата"] # Заголовки для листов пользователей
+    user_sheet_headers = ["ID", "Номер Самоката", "Сервис", "Время Принятия", "ID Чата"]
 
     for user_id in sorted_user_ids:
         user_display_name = user_info_for_sheets[user_id]
-        # Telegram username может быть длиной до 32 символов.
-        # Имя листа в Excel не может превышать 31 символ и не может содержать некоторые спец. символы.
-        # Очищаем имя для листа
-        sheet_name_raw = f"{user_display_name[:25].replace('@', '')}" # Обрезаем и убираем @
-        # Удаляем недопустимые символы для имени листа
+        sheet_name_raw = f"{user_display_name[:25].replace('@', '')}"
         invalid_chars = re.compile(r'[\\/:*?"<>|]')
         sheet_name = invalid_chars.sub('', sheet_name_raw)
         
-        # Добавляем префикс ID, если после очистки имя пустое или слишком короткое,
-        # или если оно совпадает с уже существующим листом (крайне маловероятно после обработки)
-        if not sheet_name or len(sheet_name) < 3: # Если имя слишком короткое после очистки
+        if not sheet_name or len(sheet_name) < 3:
              sheet_name = f"ID{user_id}"
         
-        # Убедимся, что имя листа уникально (если вдруг совпадения по коротким именам)
         original_sheet_name = sheet_name
         counter = 1
         while sheet_name in wb.sheetnames:
-            sheet_name = f"{original_sheet_name[:28]}{counter}" # Добавляем счетчик, чтобы не превысить 31 символ
+            sheet_name = f"{original_sheet_name[:28]}{counter}"
             counter += 1
 
         ws_user = wb.create_sheet(title=sheet_name)
@@ -445,21 +431,15 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
             cell.font = header_font
 
         current_user_total = 0
-        user_service_breakdown = defaultdict(int) # Для статистики по сервисам на листе пользователя
+        user_service_breakdown = defaultdict(int)
 
-        # Записи для текущего пользователя
         for record in user_records[user_id]:
-            # Отфильтровываем user_id, username, fullname, chat_id (дублируются в названии листа)
-            # Структура record: ID, Номер Самоката, Сервис, ID Пользователя, Ник, Полное имя, Время Принятия, ID Чата
-            # Новая строка: ID, Номер Самоката, Сервис, Время Принятия, ID Чата
             row_to_add = [record[0], record[1], record[2], record[6], record[7]]
             ws_user.append(row_to_add)
             current_user_total += 1
-            user_service_breakdown[record[2]] += 1 # Считаем по сервисам для этого пользователя
+            user_service_breakdown[record[2]] += 1
 
-        # Добавляем итоговую информацию в конце листа пользователя
-        ws_user.append([]) # Пустая строка для разделения
-        
+        ws_user.append([])
         ws_user.append(["Статистика по сервисам:"])
         ws_user.cell(row=ws_user.max_row, column=1).font = Font(bold=True)
         ws_user.merge_cells(start_row=ws_user.max_row, start_column=1, end_row=ws_user.max_row, end_column=2)
@@ -467,15 +447,13 @@ def create_excel_report(records: List[Tuple]) -> BytesIO:
         for service, count in sorted(user_service_breakdown.items()):
             ws_user.append([service, count])
 
-        ws_user.append([]) # Еще одна пустая строка
-        
+        ws_user.append([])
         ws_user.append(["Всего принято:", current_user_total])
         ws_user.cell(row=ws_user.max_row, column=1).font = Font(bold=True)
         ws_user.cell(row=ws_user.max_row, column=2).font = Font(bold=True)
         ws_user.cell(row=ws_user.max_row, column=1).alignment = Alignment(horizontal='right')
         ws_user.cell(row=ws_user.max_row, column=2).alignment = Alignment(horizontal='center')
 
-        # Автонастройка ширины столбцов на листе пользователя
         for col_idx, col in enumerate(ws_user.columns):
             max_length = 0
             column_letter = get_column_letter(col_idx + 1)
@@ -561,10 +539,13 @@ async def handle_text_messages(message: types.Message):
     if message.text.startswith('/'):
         return
     await process_scooter_text(message, message.text)
+
 @dp.message_handler(IsAdminFilter(), commands=["service_report"])
 async def service_report_handler(message: types.Message):
+    logging.info(f"Получена команда /service_report от user_id={message.from_user.id}, args={message.get_args()}")
     args = message.get_args().split()
     if len(args) != 2:
+        logging.warning("Недостаточно аргументов для /service_report")
         await message.reply(
             "Используйте: /service_report <начало> <конец>\n"
             "Пример: /service_report 2024-07-15 2024-07-25"
@@ -572,10 +553,13 @@ async def service_report_handler(message: types.Message):
         return
 
     start_date_str, end_date_str = args
+    logging.info(f"Попытка обработки дат: {start_date_str} - {end_date_str}")
     try:
         start_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
         end_date = datetime.datetime.strptime(end_date_str, "%Y-%m-%d").date()
-    except Exception:
+        logging.info(f"Даты успешно обработаны: {start_date} - {end_date}")
+    except Exception as e:
+        logging.error(f"Ошибка формата даты: {e}")
         await message.reply("Некорректный формат даты. Дата должна быть в YYYY-MM-DD.")
         return
 
@@ -584,29 +568,31 @@ async def service_report_handler(message: types.Message):
     total_service = defaultdict(int)
 
     for cur_date in (start_date + datetime.timedelta(n) for n in range((end_date - start_date).days + 1)):
-        # Утренняя смена
+        logging.info(f"Обработка даты {cur_date}")
         morning_start = TIMEZONE.localize(datetime.datetime.combine(cur_date, datetime.time(7, 0, 0)))
         morning_end = TIMEZONE.localize(datetime.datetime.combine(cur_date, datetime.time(15, 0, 0)))
         morning_query = "SELECT service FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
         morning_records = await db_fetch_all(morning_query, (morning_start.strftime("%Y-%m-%d %H:%M:%S"), morning_end.strftime("%Y-%m-%d %H:%M:%S")))
+        logging.info(f"Утренние записи для {cur_date}: {len(morning_records)}")
+
         morning_services = defaultdict(int)
         for (service,) in morning_records:
             morning_services[service] += 1
             total_service[service] += 1
             total_all += 1
 
-        # Вечерняя смена (с учетом ночи)
         even_start = TIMEZONE.localize(datetime.datetime.combine(cur_date, datetime.time(15, 0, 0)))
         even_end = TIMEZONE.localize(datetime.datetime.combine(cur_date + datetime.timedelta(days=1), datetime.time(4, 0, 0)))
         even_query = "SELECT service FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
         even_records = await db_fetch_all(even_query, (even_start.strftime("%Y-%m-%d %H:%M:%S"), even_end.strftime("%Y-%m-%d %H:%M:%S")))
+        logging.info(f"Вечерние записи для {cur_date}: {len(even_records)}")
+
         even_services = defaultdict(int)
         for (service,) in even_records:
             even_services[service] += 1
             total_service[service] += 1
             total_all += 1
 
-        # Формируем строки по дням
         date_str = cur_date.strftime("%d.%m")
         report_lines.append(f"<b>{date_str}</b>")
         report_lines.append("Утренняя смена:")
@@ -615,24 +601,29 @@ async def service_report_handler(message: types.Message):
         report_lines.append("Вечерняя смена:")
         for service, count in sorted(even_services.items()):
             report_lines.append(f"{service}: {count} шт.")
-        report_lines.append("")  # пустая строка-разделитель
+        report_lines.append("")
 
-    # Итог по всему периоду
     report_lines.append("<b>Итог по сервисам за период:</b>")
     for service, count in sorted(total_service.items()):
         report_lines.append(f"{service}: {count} шт.")
     report_lines.append(f"\n<b>Общий итог: {total_all} шт.</b>")
 
-    # Отправляем по частям, если превышает лимит
+    report_text = '\n'.join(report_lines)
+    logging.info(f"Отчет сформирован, строк: {len(report_lines)}, символов: {len(report_text)}")
     MESSAGE_LIMIT = 4000
     buffer = []
     for line in report_lines:
-        if len('\n'.join(buffer)) + len(line) + 1 > MESSAGE_LIMIT:
-            await message.answer('\n'.join(buffer))
+        buffer_text = '\n'.join(buffer)
+        if len(buffer_text) + len(line) + 1 > MESSAGE_LIMIT:
+            logging.info(f"Отправка части отчета: {len(buffer_text)} символов")
+            await message.answer(buffer_text)
             buffer = []
         buffer.append(line)
     if buffer:
-        await message.answer('\n'.join(buffer))
+        buffer_text = '\n'.join(buffer)
+        logging.info(f"Отправка последней части отчета: {len(buffer_text)} символов")
+        await message.answer(buffer_text)
+
 @dp.message_handler(IsAllowedChatFilter(), content_types=types.ContentTypes.PHOTO)
 async def handle_photo_messages(message: types.Message):
     if message.caption:
@@ -693,7 +684,6 @@ async def send_scheduled_report(shift_type: str):
             except Exception as err:
                 logging.error(f"Не удалось отправить уведомление об ошибке администратору {admin_id}: {err}")
 
-
 async def on_startup(dispatcher: Dispatcher):
     global db_executor
     db_executor = ThreadPoolExecutor(max_workers=5)
@@ -723,7 +713,6 @@ async def on_startup(dispatcher: Dispatcher):
     ]
     await dispatcher.bot.set_my_commands(admin_commands)
     logging.info("Бот запущен и команды установлены.")
-
 
 async def on_shutdown(dispatcher: Dispatcher):
     global db_executor
