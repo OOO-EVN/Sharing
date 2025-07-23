@@ -189,10 +189,14 @@ async def export_excel_handler(message: types.Message):
         logging.error(f"Ошибка при отправке Excel файла: {e}")
         await message.answer("Произошла ошибка при отправке отчета.")
 
+
 async def service_report_handler(message: types.Message):
     args = message.get_args().split()
     if len(args) != 2:
-        await message.reply("Используйте: /service_report <начало> <конец>\nПример: /service_report 2024-07-15 2024-07-25")
+        await message.reply(
+            "Используйте: /service_report <начало> <конец>\nПример: /service_report 2024-07-15 2024-07-25",
+            parse_mode=None
+        )
         return
 
     start_date_str, end_date_str = args
@@ -200,7 +204,10 @@ async def service_report_handler(message: types.Message):
         start_date = TIMEZONE.localize(datetime.datetime.strptime(start_date_str, "%Y-%m-%d"))
         end_date = TIMEZONE.localize(datetime.datetime.strptime(end_date_str, "%Y-%m-%d") + datetime.timedelta(days=1))
     except Exception as e:
-        await message.reply("Некорректный формат даты. Дата должна быть в YYYY-MM-DD.")
+        await message.reply(
+            "Некорректный формат даты. Дата должна быть в YYYY-MM-DD.",
+            parse_mode=None
+        )
         return
 
     report_lines = []
@@ -216,21 +223,25 @@ async def service_report_handler(message: types.Message):
         morning_records = await db_fetch_all(morning_query, (morning_start.strftime("%Y-%m-%d %H:%M:%S"), morning_end.strftime("%Y-%m-%d %H:%M:%S")))
 
         morning_services = defaultdict(int)
+        morning_total = 0
         for (service,) in morning_records:
             morning_services[service] += 1
             total_service[service] += 1
+            morning_total += 1
             total_all += 1
 
         evening_start = TIMEZONE.localize(datetime.datetime.combine(current_date.date(), datetime.time(15, 0, 0)))
         evening_end = TIMEZONE.localize(datetime.datetime.combine(current_date.date() + datetime.timedelta(days=1), datetime.time(4, 0, 0)))
         
         evening_query = "SELECT service FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
-        even_records = await db_fetch_all(evening_query, (evening_start.strftime("%Y-%m-%d %H:%M:%S"), evening_end.strftime("%Y-%m-%d %H:%M:%S")))
+        evening_records = await db_fetch_all(evening_query, (evening_start.strftime("%Y-%m-%d %H:%M:%S"), evening_end.strftime("%Y-%m-%d %H:%M:%S")))
 
-        even_services = defaultdict(int)
-        for (service,) in even_records:
-            even_services[service] += 1
+        evening_services = defaultdict(int)
+        evening_total = 0
+        for (service,) in evening_records:
+            evening_services[service] += 1
             total_service[service] += 1
+            evening_total += 1
             total_all += 1
 
         date_str = current_date.strftime("%d.%m")
@@ -239,8 +250,11 @@ async def service_report_handler(message: types.Message):
         for service, count in sorted(morning_services.items()):
             report_lines.append(f"{service}: {count} шт.")
         report_lines.append("Вечерняя смена (15:00-4:00):")
-        for service, count in sorted(even_services.items()):
+        for service, count in sorted(evening_services.items()):
             report_lines.append(f"{service}: {count} шт.")
+        # Add daily total
+        day_total = morning_total + evening_total
+        report_lines.append(f"<b>Итог за день: {day_total}</b>")
         report_lines.append("")
 
         current_date += datetime.timedelta(days=1)
@@ -255,12 +269,12 @@ async def service_report_handler(message: types.Message):
     buffer = []
     for line in report_lines:
         if len('\n'.join(buffer + [line])) > MESSAGE_LIMIT:
-            await message.answer('\n'.join(buffer))
+            await message.answer('\n'.join(buffer), parse_mode="HTML")
             buffer = []
         buffer.append(line)
     
     if buffer:
-        await message.answer('\n'.join(buffer))
+        await message.answer('\n'.join(buffer), parse_mode="HTML")
 
 async def send_scheduled_report(shift_type: str):
     start_time, end_time, shift_name = get_shift_time_range_for_report(shift_type)
