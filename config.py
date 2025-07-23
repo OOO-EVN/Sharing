@@ -1,8 +1,10 @@
+# config.py
 import os
 import re
 import logging
 from dotenv import load_dotenv
 import pytz
+from aiogram import Bot  # Add aiogram import
 
 # Logging configuration
 logging.basicConfig(
@@ -21,6 +23,9 @@ load_dotenv()
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден в .env файле.")
+
+# Initialize bot
+bot = Bot(token=BOT_TOKEN)  # Initialize aiogram Bot
 
 # Admin and chat IDs
 try:
