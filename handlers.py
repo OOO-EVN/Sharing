@@ -1,6 +1,6 @@
 from aiogram import types
 from aiogram.dispatcher.filters import BoundFilter
-from config import ADMIN_IDS, ALLOWED_CHAT_IDS, SERVICE_ALIASES, YANDEX_SCOOTER_PATTERN, WOOSH_SCOOTER_PATTERN, JET_SCOOTER_PATTERN, BATCH_QUANTITY_PATTERN, TIMEZONE
+from config import ADMIN_IDS, ALLOWED_CHAT_IDS, SERVICE_ALIASES, YANDEX_SCOOTER_PATTERN, WOOSH_SCOOTER_PATTERN, JET_SCOOTER_PATTERN, BOLT_SCOOTER_PATTERN, BATCH_QUANTITY_PATTERN, TIMEZONE
 from database import db_write_batch, db_fetch_all
 from collections import defaultdict
 import datetime
@@ -28,41 +28,6 @@ async def command_start_handler(message: types.Message):
     )
     await message.answer(response, parse_mode="Markdown")
 
-async def batch_accept_handler(message: types.Message):
-    args = message.get_args().split()
-    if len(args) != 2:
-        await message.reply("Используйте: `/batch_accept <сервис> <количество>`", parse_mode="Markdown")
-        return
-
-    service_raw, quantity_str = args
-    service = SERVICE_ALIASES.get(service_raw.lower())
-
-    if not service:
-        await message.reply("Неизвестный сервис. Доступны: `Yandex` (`y`), `Whoosh` (`w`), `Jet` (`j`), `Bolt` (`b`).", parse_mode="Markdown")
-        return
-    try:
-        quantity = int(quantity_str)
-        if not (0 < quantity <= 200):
-            raise ValueError
-    except ValueError:
-        await message.reply("Количество должно быть числом от 1 до 200.")
-        return
-
-    user = message.from_user
-    now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
-
-    records_to_insert = [
-        (
-            f"{service.upper()}_BATCH_{i+1}",
-            service, user.id, user.username, user.full_name, now_localized_str, message.chat.id
-        ) for i in range(quantity)
-    ]
-
-    await db_write_batch(records_to_insert)
-
-    user_mention = f"<a href='tg://user?id={user.id}'>{user.full_name}</a>"
-    await message.reply(f"{user_mention}, принято {quantity} самокатов сервиса <b>{service}</b>.", parse_mode="HTML")
-
 async def process_scooter_text(message: types.Message, text_to_process: str):
     user = message.from_user
     now_localized_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
@@ -72,6 +37,7 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
 
     text_for_numbers = text_to_process
 
+    # Обработка пакетного ввода
     batch_matches = BATCH_QUANTITY_PATTERN.findall(text_to_process)
     if batch_matches:
         for service_raw, quantity_str in batch_matches:
@@ -80,17 +46,19 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
                 quantity = int(quantity_str)
                 if service and 0 < quantity <= 200:
                     for i in range(quantity):
-                        placeholder_number = f"{service.upper()}_BATCH_{datetime.datetime.now().strftime('%H%M%S%f')}_{i+1}"
+                        placeholder_number = f"{service.upper()}_BATCH_{datetime.datetime.now(TIMEZONE).strftime('%H%M%S%f')}_{i+1}"
                         records_to_insert.append((placeholder_number, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
                     accepted_summary[service] += quantity
             except (ValueError, TypeError):
                 continue
         text_for_numbers = BATCH_QUANTITY_PATTERN.sub('', text_to_process)
 
+    # Обработка отдельных номеров самокатов
     patterns = {
         "Яндекс": YANDEX_SCOOTER_PATTERN,
         "Whoosh": WOOSH_SCOOTER_PATTERN,
-        "JetOrBolt": JET_SCOOTER_PATTERN
+        "Jet": JET_SCOOTER_PATTERN,
+        "Bolt": BOLT_SCOOTER_PATTERN
     }
 
     processed_numbers = set()
@@ -104,17 +72,8 @@ async def process_scooter_text(message: types.Message, text_to_process: str):
             if clean_num in processed_numbers:
                 continue
 
-            if service == "JetOrBolt":
-                try:
-                    numeric_value = int(raw_num)
-                    resolved_service = "Bolt" if numeric_value >= 600000 else "Jet"
-                except ValueError:
-                    resolved_service = "Jet"
-            else:
-                resolved_service = service
-
-            records_to_insert.append((clean_num, resolved_service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
-            accepted_summary[resolved_service] += 1
+            records_to_insert.append((clean_num, service, user.id, user.username, user.full_name, now_localized_str, message.chat.id))
+            accepted_summary[service] += 1
             processed_numbers.add(clean_num)
 
     if not records_to_insert:

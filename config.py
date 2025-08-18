@@ -14,22 +14,6 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-import os
-import re
-import logging
-from dotenv import load_dotenv
-import pytz
-from aiogram import Bot
-
-# Логгирование
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('bot.log'),
-        logging.StreamHandler()
-    ]
-)
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -60,8 +44,8 @@ TIMEZONE = pytz.timezone('Asia/Almaty')
 # Регулярки по номерам
 YANDEX_SCOOTER_PATTERN = re.compile(r'\b(\d{8})\b')
 WOOSH_SCOOTER_PATTERN = re.compile(r'\b([A-ZА-Я]{2}\d{4})\b', re.IGNORECASE)
-JET_SCOOTER_PATTERN = re.compile(r'\b(\d{3}-?\d{3})\b')  # Используется и для Bolt
-
+JET_SCOOTER_PATTERN = re.compile(r'\b(\d{6}|\d{3}-\d{3})\b')
+BOLT_SCOOTER_PATTERN = re.compile(r'\b(\d{4})\b')
 # Пакетный ввод — whoosh 3, bolt 5 и т.п.
 BATCH_QUANTITY_PATTERN = re.compile(r'\b(whoosh|jet|bolt|yandex|вуш|джет|болт|яндекс|w|j|b|y)\s+(\d+)\b', re.IGNORECASE)
 # Алиасы для всех сервисов
