@@ -1,5 +1,6 @@
+# reports.py — ФИНАЛЬНАЯ ВЕРСИЯ (без импорта bot!)
 from aiogram import types
-from config import TIMEZONE, REPORT_CHAT_IDS, bot
+from config import TIMEZONE, REPORT_CHAT_IDS
 from database import db_fetch_all
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
@@ -7,11 +8,10 @@ from openpyxl.utils import get_column_letter
 from io import BytesIO
 import datetime
 import logging
-import re
 from collections import defaultdict
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-scheduler = None
+scheduler = AsyncIOScheduler(timezone=str(TIMEZONE))
 
 def create_excel_report(records: list[tuple]) -> BytesIO:
     wb = Workbook()
@@ -77,87 +77,12 @@ def create_excel_report(records: list[tuple]) -> BytesIO:
         adjusted_width = (max_length + 2) * 1.2
         ws_totals.column_dimensions[column_letter].width = adjusted_width
 
-    user_records = defaultdict(list)
-    user_info_for_sheets = {}
-
-    for record in records:
-        user_id = record[3]
-        username = record[4]
-        fullname = record[5]
-        display_name = fullname if fullname else (f"@{username}" if username else f"ID: {user_id}")
-        
-        user_records[user_id].append(record)
-        if user_id not in user_info_for_sheets:
-            user_info_for_sheets[user_id] = display_name
-
-    sorted_user_ids = sorted(user_records.keys(), key=lambda user_id: user_info_for_sheets[user_id].lower())
-
-    user_sheet_headers = ["ID", "Номер Самоката", "Сервис", "Время Принятия", "ID Чата"]
-
-    for user_id in sorted_user_ids:
-        user_display_name = user_info_for_sheets[user_id]
-        sheet_name_raw = f"{user_display_name[:25].replace('@', '')}"
-        invalid_chars = re.compile(r'[\\/:*?"<>|]')
-        sheet_name = invalid_chars.sub('', sheet_name_raw)
-        
-        if not sheet_name or len(sheet_name) < 3:
-             sheet_name = f"ID{user_id}"
-        
-        original_sheet_name = sheet_name
-        counter = 1
-        while sheet_name in wb.sheetnames:
-            sheet_name = f"{original_sheet_name[:28]}{counter}"
-            counter += 1
-
-        ws_user = wb.create_sheet(title=sheet_name)
-        ws_user.append(user_sheet_headers)
-        for cell in ws_user[1]:
-            cell.font = header_font
-
-        current_user_total = 0
-        user_service_breakdown = defaultdict(int)
-
-        for record in user_records[user_id]:
-            row_to_add = [record[0], record[1], record[2], record[6], record[7]]
-            ws_user.append(row_to_add)
-            current_user_total += 1
-            user_service_breakdown[record[2]] += 1
-
-        ws_user.append([])
-        ws_user.append(["Статистика по сервисам:"])
-        ws_user.cell(row=ws_user.max_row, column=1).font = Font(bold=True)
-        ws_user.merge_cells(start_row=ws_user.max_row, start_column=1, end_row=ws_user.max_row, end_column=2)
-
-        for service, count in sorted(user_service_breakdown.items()):
-            ws_user.append([service, count])
-
-        ws_user.append([])
-        ws_user.append(["Всего принято:", current_user_total])
-        ws_user.cell(row=ws_user.max_row, column=1).font = Font(bold=True)
-        ws_user.cell(row=ws_user.max_row, column=2).font = Font(bold=True)
-        ws_user.cell(row=ws_user.max_row, column=1).alignment = Alignment(horizontal='right')
-        ws_user.cell(row=ws_user.max_row, column=2).alignment = Alignment(horizontal='center')
-
-        for col_idx, col in enumerate(ws_user.columns):
-            max_length = 0
-            column_letter = get_column_letter(col_idx + 1)
-            for cell in col:
-                try:
-                    if cell.value:
-                        length = len(str(cell.value))
-                        if length > max_length:
-                            max_length = length
-                except:
-                    pass
-            adjusted_width = (max_length + 2) * 1.2
-            ws_user.column_dimensions[column_letter].width = adjusted_width
-            
     buffer = BytesIO()
     wb.save(buffer)
     buffer.seek(0)
     return buffer
 
-async def export_excel_handler(message: types.Message):
+async def export_excel_handler(message: types.Message, bot_instance):
     is_today_shift = message.get_command() == '/export_today_excel'
     
     await message.answer(f"Формирую отчет...")
@@ -165,7 +90,7 @@ async def export_excel_handler(message: types.Message):
     query = "SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters"
     
     if is_today_shift:
-        start_time, end_time, shift_name = get_shift_time_range()
+        start_time, end_time, shift_name = get_shift_time_range_for_report('morning')
         start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
         end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
         query += " WHERE timestamp BETWEEN ? AND ?"
@@ -184,13 +109,13 @@ async def export_excel_handler(message: types.Message):
         excel_file = create_excel_report(records)
         report_type = "shift" if is_today_shift else "full"
         filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
-        await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption=f"Ваш отчет{date_filter_text} готов.")
+        await bot_instance.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption=f"Ваш отчет{date_filter_text} готов.")
     except Exception as e:
         logging.error(f"Ошибка при отправке Excel файла: {e}")
         await message.answer("Произошла ошибка при отправке отчета.")
 
 
-async def service_report_handler(message: types.Message):
+async def service_report_handler(message: types.Message, bot_instance):
     args = message.get_args().split()
     if len(args) != 2:
         await message.reply(
@@ -252,7 +177,6 @@ async def service_report_handler(message: types.Message):
         report_lines.append("Вечерняя смена (15:00-4:00):")
         for service, count in sorted(evening_services.items()):
             report_lines.append(f"{service}: {count} шт.")
-        # Add daily total
         day_total = morning_total + evening_total
         report_lines.append(f"<b>Итог за день: {day_total}</b>")
         report_lines.append("")
@@ -269,48 +193,12 @@ async def service_report_handler(message: types.Message):
     buffer = []
     for line in report_lines:
         if len('\n'.join(buffer + [line])) > MESSAGE_LIMIT:
-            await message.answer('\n'.join(buffer), parse_mode="HTML")
+            await bot_instance.send_message(message.chat.id, '\n'.join(buffer), parse_mode="HTML")
             buffer = []
         buffer.append(line)
     
     if buffer:
-        await message.answer('\n'.join(buffer), parse_mode="HTML")
-
-async def send_scheduled_report(shift_type: str):
-    start_time, end_time, shift_name = get_shift_time_range_for_report(shift_type)
-    
-    if not start_time or not end_time:
-        return
-
-    start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
-    end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
-
-    query = "SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
-    records = await db_fetch_all(query, (start_str, end_str))
-
-    if not records:
-        message_text = f"Отчет за {shift_name} ({start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}): За смену ничего не принято."
-        for chat_id in REPORT_CHAT_IDS:
-            try:
-                await bot.send_message(chat_id, message_text)
-            except Exception:
-                pass
-        return
-
-    try:
-        excel_file = create_excel_report(records)
-        report_type_filename = "morning_shift" if shift_type == 'morning' else "evening_shift"
-        filename = f"report_{report_type_filename}_{start_time.strftime('%Y%m%d')}.xlsx"
-        caption = f"Ежедневный отчет за {shift_name} ({start_time.strftime('%d.%m %H:%M')} - {end_time.strftime('%d.%m %H:%M')})"
-        
-        for chat_id in REPORT_CHAT_IDS:
-            try:
-                excel_file.seek(0)
-                await bot.send_document(chat_id, types.InputFile(excel_file, filename=filename), caption=caption)
-            except Exception:
-                pass
-    except Exception:
-        pass
+        await bot_instance.send_message(message.chat.id, '\n'.join(buffer), parse_mode="HTML")
 
 def get_shift_time_range_for_report(shift_type: str):
     now = datetime.datetime.now(TIMEZONE)
@@ -331,9 +219,42 @@ def get_shift_time_range_for_report(shift_type: str):
         
     return start_time, end_time, shift_name
 
+async def send_scheduled_report(shift_type: str, bot_instance):
+    start_time, end_time, shift_name = get_shift_time_range_for_report(shift_type)
+    
+    if not start_time or not end_time:
+        return
+
+    start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
+    end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
+
+    query = "SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
+    records = await db_fetch_all(query, (start_str, end_str))
+
+    if not records:
+        message_text = f"Отчет за {shift_name} ({start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}): За смену ничего не принято."
+        for chat_id in REPORT_CHAT_IDS:
+            try:
+                await bot_instance.send_message(chat_id, message_text)
+            except Exception:
+                pass
+        return
+
+    try:
+        excel_file = create_excel_report(records)
+        report_type_filename = "morning_shift" if shift_type == 'morning' else "evening_shift"
+        filename = f"report_{report_type_filename}_{start_time.strftime('%Y%m%d')}.xlsx"
+        caption = f"Ежедневный отчет за {shift_name} ({start_time.strftime('%d.%m %H:%M')} - {end_time.strftime('%d.%m %H:%M')})"
+        
+        for chat_id in REPORT_CHAT_IDS:
+            try:
+                excel_file.seek(0)
+                await bot_instance.send_document(chat_id, types.InputFile(excel_file, filename=filename), caption=caption)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
 def setup_scheduler():
-    global scheduler
-    scheduler = AsyncIOScheduler(timezone=str(TIMEZONE))
-    scheduler.add_job(send_scheduled_report, 'cron', hour=15, minute=0, timezone=str(TIMEZONE), args=['morning'])
-    scheduler.add_job(send_scheduled_report, 'cron', hour=23, minute=0, timezone=str(TIMEZONE), args=['evening'])
-    scheduler.start()
+    # Мы НЕ будем импортировать bot здесь — он передастся из app.py
+    pass  # Заглушка — мы перенесём инициализацию в app.py
