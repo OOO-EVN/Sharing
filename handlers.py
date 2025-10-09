@@ -4,6 +4,7 @@ from config import ADMIN_IDS, ALLOWED_CHAT_IDS, SERVICE_ALIASES, YANDEX_SCOOTER_
 from database import db_write_batch, db_fetch_all, db_execute
 from collections import defaultdict
 import datetime
+import logging
 
 class IsAdminFilter(BoundFilter):
     async def check(self, message: types.Message) -> bool:
@@ -209,10 +210,11 @@ async def export_excel_handler(message: types.Message):
         return
 
     try:
+        from reports import create_excel_report
         excel_file = create_excel_report(records)
         report_type = "shift" if is_today_shift else "full"
         filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
-        await bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption=f"Ваш отчет{date_filter_text} готов.")
+        await message.bot.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption=f"Ваш отчет{date_filter_text} готов.")
     except Exception as e:
         logging.error(f"Ошибка при отправке Excel файла: {e}")
         await message.answer("Произошла ошибка при отправке отчета.")
@@ -298,88 +300,13 @@ async def service_report_handler(message: types.Message):
     buffer = []
     for line in report_lines:
         if len('\n'.join(buffer + [line])) > MESSAGE_LIMIT:
-            await message.answer('\n'.join(buffer), parse_mode="HTML")
+            await message.bot.send_message(message.chat.id, '\n'.join(buffer), parse_mode="HTML")
             buffer = []
         buffer.append(line)
 
     if buffer:
-        await message.answer('\n'.join(buffer), parse_mode="HTML")
+        await message.bot.send_message(message.chat.id, '\n'.join(buffer), parse_mode="HTML")
 
-def create_excel_report(records: list[tuple]) -> bytes:
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, Alignment
-    from openpyxl.utils import get_column_letter
-    from io import BytesIO
-
-    wb = Workbook()
-    ws_all_data = wb.active
-    ws_all_data.title = "Все данные"
-
-    headers_all_data = ["ID", "Номер Самоката", "Сервис", "ID Пользователя", "Ник", "Полное имя", "Время Принятия", "ID Чата"]
-    ws_all_data.append(headers_all_data)
-    header_font = Font(bold=True)
-    for cell in ws_all_data[1]:
-        cell.font = header_font
-
-    for row in records:
-        ws_all_data.append(row)
-
-    for col_idx, col in enumerate(ws_all_data.columns):
-        max_length = 0
-        column_letter = get_column_letter(col_idx + 1)
-        for cell in col:
-            try:
-                if cell.value:
-                    max_length = max(max_length, len(str(cell.value)))
-            except:
-                pass
-        adjusted_width = (max_length + 2) * 1.2
-        ws_all_data.column_dimensions[column_letter].width = adjusted_width
-
-    ws_totals = wb.create_sheet("Итоги")
-    totals_headers = ["Пользователь", "Всего Самокатов"]
-    ws_totals.append(totals_headers)
-    for cell in ws_totals[1]:
-        cell.font = header_font
-
-    user_total_counts_summary = defaultdict(int)
-    user_info_map_summary = {}
-
-    for record in records:
-        user_id = record[3]
-        username = record[4]
-        fullname = record[5]
-        display_name = fullname if fullname else (f"@{username}" if username else f"ID: {user_id}")
-        user_total_counts_summary[user_id] += 1
-        user_info_map_summary[user_id] = display_name
-
-    sorted_user_ids_summary = sorted(user_total_counts_summary.keys(), key=lambda user_id: user_info_map_summary[user_id].lower())
-
-    for user_id in sorted_user_ids_summary:
-        user_display_name = user_info_map_summary[user_id]
-        total_count = user_total_counts_summary[user_id]
-        ws_totals.append([user_display_name, total_count])
-        ws_totals.cell(row=ws_totals.max_row, column=1).font = Font(bold=True)
-        ws_totals.cell(row=ws_totals.max_row, column=2).font = Font(bold=True)
-
-    for col_idx, col in enumerate(ws_totals.columns):
-        max_length = 0
-        column_letter = get_column_letter(col_idx + 1)
-        for cell in col:
-            try:
-                if cell.value:
-                    max_length = max(max_length, len(str(cell.value)))
-            except:
-                pass
-        adjusted_width = (max_length + 2) * 1.2
-        ws_totals.column_dimensions[column_letter].width = adjusted_width
-
-    buffer = BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    return buffer.getvalue()
-
-# Замените все MarkdownV2 на HTML
 async def find_scooter_handler(message: types.Message):
     if not await IsAdminFilter().check(message):
         return
@@ -407,7 +334,7 @@ async def find_scooter_handler(message: types.Message):
     records = await db_fetch_all(query, (scooter_number,))
 
     if not records:
-        await message.reply(f"❌ Нет записей с номером <code>{scooter_number}</code>")
+        await message.reply(f"❌ Нет записей с номером <code>{scooter_number}</code>", parse_mode="HTML")
         return
 
     response_parts = [f"🔍 <b>История самоката <code>{scooter_number}</code>:</b>"]
@@ -430,7 +357,6 @@ async def find_scooter_handler(message: types.Message):
     if current_msg:
         await message.answer('\n'.join(current_msg), parse_mode="HTML")
 
-
 async def delete_scooter_handler(message: types.Message):
     if not await IsAdminFilter().check(message):
         return
@@ -442,7 +368,7 @@ async def delete_scooter_handler(message: types.Message):
             "Пример:\n"
             "/delete_scooter 12345678 @whoosh_master\n"
             "/delete_scooter AB1234 nobody",
-            parse_mode=None  # Убираем разметку для этого сообщения
+            parse_mode=None
         )
         return
 
@@ -459,11 +385,11 @@ async def delete_scooter_handler(message: types.Message):
     if deleted_rows > 0:
         await message.reply(
             f"✅ Удалено {deleted_rows} записей:\n"
-            f"`{scooter_number}` от пользователя `{target_username}`",
-            parse_mode="Markdown"  # Используем Markdown для обратных кавычек
+            f"<code>{scooter_number}</code> от пользователя <code>{target_username}</code>",
+            parse_mode="HTML"
         )
     else:
         await message.reply(
-            f"❌ Запись `{scooter_number}` от пользователя `@{target_username}` не найдена.",
-            parse_mode="Markdown"  # Используем Markdown для обратных кавычек
+            f"❌ Запись <code>{scooter_number}</code> от пользователя @{target_username} не найдена.",
+            parse_mode="HTML"
         )

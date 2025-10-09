@@ -1,4 +1,4 @@
-# reports.py — ФИНАЛЬНАЯ ВЕРСИЯ (без импорта bot!)
+# reports.py
 from aiogram import types
 from config import TIMEZONE, REPORT_CHAT_IDS
 from database import db_fetch_all
@@ -82,124 +82,6 @@ def create_excel_report(records: list[tuple]) -> BytesIO:
     buffer.seek(0)
     return buffer
 
-async def export_excel_handler(message: types.Message, bot_instance):
-    is_today_shift = message.get_command() == '/export_today_excel'
-    
-    await message.answer(f"Формирую отчет...")
-
-    query = "SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters"
-    
-    if is_today_shift:
-        start_time, end_time, shift_name = get_shift_time_range_for_report('morning')
-        start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
-        end_str = end_time.strftime("%Y-%m-%d %H:%M:%S")
-        query += " WHERE timestamp BETWEEN ? AND ?"
-        records = await db_fetch_all(query, (start_str, end_str))
-        date_filter_text = f" за {shift_name}"
-    else:
-        query += " ORDER BY timestamp DESC"
-        records = await db_fetch_all(query)
-        date_filter_text = " за все время"
-
-    if not records:
-        await message.answer(f"Нет данных для экспорта{date_filter_text}.")
-        return
-
-    try:
-        excel_file = create_excel_report(records)
-        report_type = "shift" if is_today_shift else "full"
-        filename = f"report_{report_type}_{datetime.date.today().isoformat()}.xlsx"
-        await bot_instance.send_document(message.chat.id, types.InputFile(excel_file, filename=filename), caption=f"Ваш отчет{date_filter_text} готов.")
-    except Exception as e:
-        logging.error(f"Ошибка при отправке Excel файла: {e}")
-        await message.answer("Произошла ошибка при отправке отчета.")
-
-
-async def service_report_handler(message: types.Message, bot_instance):
-    args = message.get_args().split()
-    if len(args) != 2:
-        await message.reply(
-            "Используйте: /service_report <начало> <конец>\nПример: /service_report 2024-07-15 2024-07-25",
-            parse_mode=None
-        )
-        return
-
-    start_date_str, end_date_str = args
-    try:
-        start_date = TIMEZONE.localize(datetime.datetime.strptime(start_date_str, "%Y-%m-%d"))
-        end_date = TIMEZONE.localize(datetime.datetime.strptime(end_date_str, "%Y-%m-%d") + datetime.timedelta(days=1))
-    except Exception as e:
-        await message.reply(
-            "Некорректный формат даты. Дата должна быть в YYYY-MM-DD.",
-            parse_mode=None
-        )
-        return
-
-    report_lines = []
-    total_all = 0
-    total_service = defaultdict(int)
-
-    current_date = start_date
-    while current_date <= end_date:
-        morning_start = TIMEZONE.localize(datetime.datetime.combine(current_date.date(), datetime.time(7, 0, 0)))
-        morning_end = TIMEZONE.localize(datetime.datetime.combine(current_date.date(), datetime.time(15, 0, 0)))
-        
-        morning_query = "SELECT service FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
-        morning_records = await db_fetch_all(morning_query, (morning_start.strftime("%Y-%m-%d %H:%M:%S"), morning_end.strftime("%Y-%m-%d %H:%M:%S")))
-
-        morning_services = defaultdict(int)
-        morning_total = 0
-        for (service,) in morning_records:
-            morning_services[service] += 1
-            total_service[service] += 1
-            morning_total += 1
-            total_all += 1
-
-        evening_start = TIMEZONE.localize(datetime.datetime.combine(current_date.date(), datetime.time(15, 0, 0)))
-        evening_end = TIMEZONE.localize(datetime.datetime.combine(current_date.date() + datetime.timedelta(days=1), datetime.time(4, 0, 0)))
-        
-        evening_query = "SELECT service FROM accepted_scooters WHERE timestamp BETWEEN ? AND ?"
-        evening_records = await db_fetch_all(evening_query, (evening_start.strftime("%Y-%m-%d %H:%M:%S"), evening_end.strftime("%Y-%m-%d %H:%M:%S")))
-
-        evening_services = defaultdict(int)
-        evening_total = 0
-        for (service,) in evening_records:
-            evening_services[service] += 1
-            total_service[service] += 1
-            evening_total += 1
-            total_all += 1
-
-        date_str = current_date.strftime("%d.%m")
-        report_lines.append(f"<b>{date_str}</b>")
-        report_lines.append("Утренняя смена (7:00-15:00):")
-        for service, count in sorted(morning_services.items()):
-            report_lines.append(f"{service}: {count} шт.")
-        report_lines.append("Вечерняя смена (15:00-4:00):")
-        for service, count in sorted(evening_services.items()):
-            report_lines.append(f"{service}: {count} шт.")
-        day_total = morning_total + evening_total
-        report_lines.append(f"<b>Итог за день: {day_total}</b>")
-        report_lines.append("")
-
-        current_date += datetime.timedelta(days=1)
-
-    report_lines.append("<b>Итог по сервисам за период:</b>")
-    for service, count in sorted(total_service.items()):
-        report_lines.append(f"{service}: {count} шт.")
-    report_lines.append(f"\n<b>Общий итог: {total_all} шт.</b>")
-
-    report_text = '\n'.join(report_lines)
-    MESSAGE_LIMIT = 4000
-    buffer = []
-    for line in report_lines:
-        if len('\n'.join(buffer + [line])) > MESSAGE_LIMIT:
-            await bot_instance.send_message(message.chat.id, '\n'.join(buffer), parse_mode="HTML")
-            buffer = []
-        buffer.append(line)
-    
-    if buffer:
-        await bot_instance.send_message(message.chat.id, '\n'.join(buffer), parse_mode="HTML")
-
 def get_shift_time_range_for_report(shift_type: str):
     now = datetime.datetime.now(TIMEZONE)
     today = now.date()
@@ -219,10 +101,15 @@ def get_shift_time_range_for_report(shift_type: str):
         
     return start_time, end_time, shift_name
 
+# 🔥 ИСПРАВЛЕНА: добавлено логирование и проверка bot_instance
 async def send_scheduled_report(shift_type: str, bot_instance):
+    if bot_instance is None:
+        logging.error("❌ bot_instance is None in send_scheduled_report!")
+        return
+
     start_time, end_time, shift_name = get_shift_time_range_for_report(shift_type)
-    
     if not start_time or not end_time:
+        logging.warning(f"Не удалось определить время смены для {shift_type}")
         return
 
     start_str = start_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -236,8 +123,9 @@ async def send_scheduled_report(shift_type: str, bot_instance):
         for chat_id in REPORT_CHAT_IDS:
             try:
                 await bot_instance.send_message(chat_id, message_text)
-            except Exception:
-                pass
+                logging.info(f"✅ Текстовый отчёт отправлен в {chat_id}")
+            except Exception as e:
+                logging.error(f"❌ Не удалось отправить текст в {chat_id}: {e}")
         return
 
     try:
@@ -249,12 +137,13 @@ async def send_scheduled_report(shift_type: str, bot_instance):
         for chat_id in REPORT_CHAT_IDS:
             try:
                 excel_file.seek(0)
-                await bot_instance.send_document(chat_id, types.InputFile(excel_file, filename=filename), caption=caption)
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-def setup_scheduler():
-    # Мы НЕ будем импортировать bot здесь — он передастся из app.py
-    pass  # Заглушка — мы перенесём инициализацию в app.py
+                await bot_instance.send_document(
+                    chat_id,
+                    types.InputFile(excel_file, filename=filename),
+                    caption=caption
+                )
+                logging.info(f"✅ Excel-отчёт отправлен в {chat_id}")
+            except Exception as e:
+                logging.error(f"❌ Ошибка отправки Excel в {chat_id}: {e}")
+    except Exception as e:
+        logging.error(f"❌ Ошибка генерации Excel-отчёта: {e}")
