@@ -15,7 +15,8 @@ from handlers import (
     find_scooter_handler,
     delete_scooter_handler,
     export_excel_handler,
-    service_report_handler
+    service_report_handler,
+    monthly_report_handler # <-- Добавляем импорт новой функции
 )
 import asyncio
 import logging
@@ -88,6 +89,7 @@ async def on_startup(dispatcher: Dispatcher):
         types.BotCommand(command="export_today_excel", description="Экспорт Excel за текущую смену"),
         types.BotCommand(command="export_all_excel", description="Экспорт Excel за все время"),
         types.BotCommand(command="service_report", description="Отчет по сервисам за период"),
+        types.BotCommand(command="monthly_report", description="Ежемесячный отчет по сотрудникам"),
         types.BotCommand(command="delete_scooter", description="Удалить номер самоката по username"),
         types.BotCommand(command="find_scooter", description="Найти историю по номеру самоката"),
     ]
@@ -108,6 +110,7 @@ def register_handlers():
     dp.register_message_handler(today_stats_handler, IsAdminFilter(), commands="today_stats")
     dp.register_message_handler(export_excel_handler, IsAdminFilter(), commands=["export_today_excel", "export_all_excel"])
     dp.register_message_handler(service_report_handler, IsAdminFilter(), commands=["service_report"])
+    dp.register_message_handler(monthly_report_handler, IsAdminFilter(), commands=["monthly_report"]) # <-- Регистрируем новый обработчик
     dp.register_message_handler(find_scooter_handler, IsAdminFilter(), commands=["find_scooter"])
     dp.register_message_handler(delete_scooter_handler, IsAdminFilter(), commands=["delete_scooter"])
     dp.register_message_handler(handle_text_messages, IsAllowedChatFilter(), content_types=types.ContentTypes.TEXT)

@@ -1,6 +1,6 @@
 # reports.py
 from aiogram import types
-from config import TIMEZONE, REPORT_CHAT_IDS
+from config import TIMEZONE, REPORT_CHAT_IDS, SERVICE_ALIASES
 from database import db_fetch_all
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
@@ -82,6 +82,47 @@ def create_excel_report(records: list[tuple]) -> BytesIO:
     buffer.seek(0)
     return buffer
 
+def create_monthly_excel_report(data: list[list], month_start_dt: datetime.datetime) -> BytesIO:
+    """
+    Создает Excel файл с отчетом за месяц в простом виде:
+    Столбцы: Пользователь | Bolt | Jet | Whoosh | Яндекс | Итого
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"{month_start_dt.strftime('%B_%Y')}"
+
+    # Заголовки (только нужные)
+    headers = ["Пользователь", "Bolt", "Jet", "Whoosh", "Яндекс", "Итого"]
+    ws.append(headers)
+
+    # Шрифт для заголовков
+    header_font = Font(bold=True)
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    # Добавляем данные
+    for row_data in data:
+        ws.append(row_data)
+
+    # Автоширина колонок
+    for col_idx, col in enumerate(ws.columns):
+        max_length = 0
+        column_letter = get_column_letter(col_idx + 1)
+        for cell in col:
+            try:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            except:
+                pass
+        adjusted_width = (max_length + 2) * 1.2
+        ws.column_dimensions[column_letter].width = adjusted_width
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer
+# --- КОНЕЦ УПРОЩЕННОЙ ФУНКЦИИ ---
 def get_shift_time_range_for_report(shift_type: str):
     now = datetime.datetime.now(TIMEZONE)
     today = now.date()

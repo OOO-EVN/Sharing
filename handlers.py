@@ -1,3 +1,4 @@
+# handlers.py
 from aiogram import types
 from aiogram.dispatcher.filters import BoundFilter
 from config import ADMIN_IDS, ALLOWED_CHAT_IDS, SERVICE_ALIASES, YANDEX_SCOOTER_PATTERN, WOOSH_SCOOTER_PATTERN, JET_SCOOTER_PATTERN, BOLT_SCOOTER_PATTERN, BATCH_QUANTITY_PATTERN, TIMEZONE
@@ -24,7 +25,7 @@ async def command_start_handler(message: types.Message):
         f"Привет, {message.from_user.full_name}! Я бот для приёма самокатов.\n\n"
         f"Просто отправь мне номер самоката текстом или фотографию с номером в подписи.\n"
         f"Для пакетного приёма используй формат: `сервис количество`.\n\n"
-        f"Я работаю в группах с ID: `{allowed_chats_info}` и в личных сообщениях с администраторами.\n"
+        f"Я работаю в группах с ID: `{allowed_chats_info}` и в личных сообщениях с администраторами.@sse_evn\n"
         f"Твой ID чата: `{message.chat.id}`"
     )
     await message.answer(response, parse_mode="Markdown")
@@ -393,3 +394,114 @@ async def delete_scooter_handler(message: types.Message):
             f"❌ Запись <code>{scooter_number}</code> от пользователя @{target_username} не найдена.",
             parse_mode="HTML"
         )
+
+# --- НОВАЯ ФУНКЦИЯ ДЛЯ ОПРЕДЕЛЕНИЯ ГРАНИЦ МЕСЯЦА ---
+def get_month_start_end(month_str, year_str):
+    """
+    Принимает месяц (1-12) и год (например, '09', '2024').
+    Возвращает начало и конец месяца в локализованном времени.
+    """
+    try:
+        month = int(month_str)
+        year = int(year_str)
+        if not (1 <= month <= 12):
+            return None, None
+        start_date = datetime.date(year, month, 1)
+        if month == 12:
+            end_date = datetime.date(year + 1, 1, 1)
+        else:
+            end_date = datetime.date(year, month + 1, 1)
+        start_dt = TIMEZONE.localize(datetime.datetime.combine(start_date, datetime.time(0, 0, 0)))
+        end_dt = TIMEZONE.localize(datetime.datetime.combine(end_date, datetime.time(0, 0, 0)))
+        return start_dt, end_dt
+    except (ValueError, TypeError):
+        return None, None
+# --- КОНЕЦ НОВОЙ ФУНКЦИИ ---
+# --- УПРОЩЕННЫЙ ОБРАБОТЧИК МЕСЯЧНОГО ОТЧЕТА ---
+async def monthly_report_handler(message: types.Message):
+    if not await IsAdminFilter().check(message):
+        return
+
+    args = message.get_args().strip()
+    if not args:
+        await message.reply(
+            "📊 Используйте: /monthly_report <месяц> <год>\n"
+            "Пример:\n"
+            "/monthly_report 09 2024\n"
+            "/monthly_report 10 2024"
+        )
+        return
+
+    try:
+        month_str, year_str = args.split()
+        start_dt, end_dt = get_month_start_end(month_str, year_str)
+        if start_dt is None or end_dt is None:
+            raise ValueError("Неверный формат месяца или года.")
+    except ValueError:
+        await message.reply(
+            "❌ Неверный формат. Используйте: /monthly_report <месяц> <год>\n"
+            "Месяц должен быть числом от 01 до 12, год - 4-значным числом (например, 2024).",
+            parse_mode=None
+        )
+        return
+
+    start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+    end_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    query = """
+        SELECT accepted_by_user_id, accepted_by_username, accepted_by_fullname, service
+        FROM accepted_scooters
+        WHERE timestamp >= ? AND timestamp < ?
+    """
+    records = await db_fetch_all(query, (start_str, end_str))
+
+    if not records:
+        await message.answer(f"❌ Нет данных за {start_dt.strftime('%B %Y')}.")
+        return
+
+    # Группируем данные по пользователю и сервису
+    user_stats = defaultdict(lambda: defaultdict(int))
+    user_info = {}
+
+    for user_id, username, fullname, service in records:
+        user_stats[user_id][service] += 1
+        if user_id not in user_info:
+            user_info[user_id] = {'username': username, 'fullname': fullname}
+
+    # Подготовка данных для Excel
+    excel_data = []
+    for user_id, services in user_stats.items():
+        username = user_info[user_id]['username']
+        fullname = user_info[user_id]['fullname']
+        display_name = f"@{username}" if username else fullname
+
+        # Получаем количество по каждому сервису
+        bolt_count = services.get("Bolt", 0)
+        jet_count = services.get("Jet", 0)
+        whoosh_count = services.get("Whoosh", 0)
+        yandex_count = services.get("Яндекс", 0)
+        total_count = bolt_count + jet_count + whoosh_count + yandex_count
+
+        # Формируем строку для Excel: [Пользователь, Bolt, Jet, Whoosh, Яндекс, Итого]
+        row = [display_name, bolt_count, jet_count, whoosh_count, yandex_count, total_count]
+        excel_data.append(row)
+
+    # Сортируем по убыванию общего итога (чтобы лидер был наверху)
+    excel_data.sort(key=lambda x: x[5], reverse=True)
+
+    # Отправляем Excel файл
+    try:
+        from reports import create_monthly_excel_report
+        excel_file = create_monthly_excel_report(excel_data, start_dt)
+        filename = f"monthly_report_{start_dt.strftime('%Y_%m')}.xlsx"
+        caption = f"📊 Отчет за {start_dt.strftime('%B %Y')}"
+        excel_file.seek(0)
+        await message.bot.send_document(
+            message.chat.id,
+            types.InputFile(excel_file, filename=filename),
+            caption=caption
+        )
+    except Exception as e:
+        logging.error(f"❌ Ошибка при создании или отправке Excel отчета: {e}")
+        await message.answer("❌ Произошла ошибка при формировании Excel отчета.")
+

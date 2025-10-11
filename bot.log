@@ -1143,3 +1143,267 @@ aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
 2025-10-09 13:10:19,617 - INFO - 📤 REPORT_CHAT_IDS: {-1002549279303}
 2025-10-09 13:10:19,703 - INFO - ✅ Команды бота обновлены
 2025-10-09 13:10:19,703 - INFO - Start polling.
+2025-10-09 14:04:45,004 - ERROR - Update {"update_id": 682969658, "message": {"message_id": 550, "from": {"id": 8272665697, "is_bot": false, "first_name": "evn", "username": "sse_evn", "language_code": "en"}, "chat": {"id": 8272665697, "first_name": "evn", "username": "sse_evn", "type": "private"}, "date": 1760000684, "text": "/service_report", "entities": [{"type": "bot_command", "offset": 0, "length": 15}]}} вызвал ошибку: Can't parse entities: unsupported start tag "начало" at byte offset 40
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 228, in service_report_handler
+    await message.reply(
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 115, in check_result
+    exceptions.BadRequest.detect(description)
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/utils/exceptions.py", line 140, in detect
+    raise err(cls.text or description)
+aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported start tag "начало" at byte offset 40
+2025-10-09 14:05:07,224 - ERROR - Update {"update_id": 682969661, "message": {"message_id": 551, "from": {"id": 7290788782, "is_bot": false, "first_name": "evn", "username": "sse_ev1n", "language_code": "en"}, "chat": {"id": 7290788782, "first_name": "evn", "username": "sse_ev1n", "type": "private"}, "date": 1760000707, "text": "/service_report", "entities": [{"type": "bot_command", "offset": 0, "length": 15}]}} вызвал ошибку: Can't parse entities: unsupported start tag "начало" at byte offset 40
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 228, in service_report_handler
+    await message.reply(
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 115, in check_result
+    exceptions.BadRequest.detect(description)
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/utils/exceptions.py", line 140, in detect
+    raise err(cls.text or description)
+aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported start tag "начало" at byte offset 40
+2025-10-09 14:06:08,175 - ERROR - Update {"update_id": 682969662, "message": {"message_id": 552, "from": {"id": 7290788782, "is_bot": false, "first_name": "evn", "username": "sse_ev1n", "language_code": "en"}, "chat": {"id": 7290788782, "first_name": "evn", "username": "sse_ev1n", "type": "private"}, "date": 1760000768, "text": "/service_report", "entities": [{"type": "bot_command", "offset": 0, "length": 15}]}} вызвал ошибку: Can't parse entities: unsupported start tag "начало" at byte offset 40
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 228, in service_report_handler
+    await message.reply(
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 115, in check_result
+    exceptions.BadRequest.detect(description)
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/utils/exceptions.py", line 140, in detect
+    raise err(cls.text or description)
+aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported start tag "начало" at byte offset 40
+2025-10-09 14:06:59,710 - ERROR - Update {"update_id": 682969664, "message": {"message_id": 555, "from": {"id": 7290788782, "is_bot": false, "first_name": "evn", "username": "sse_ev1n", "language_code": "en"}, "chat": {"id": 7290788782, "first_name": "evn", "username": "sse_ev1n", "type": "private"}, "date": 1760000819, "text": "/service_report 2025-08-01 2025-08-15\n@eom_master_inspectorbot", "entities": [{"type": "bot_command", "offset": 0, "length": 15}, {"type": "text_link", "offset": 38, "length": 24, "url": "https://t.me/eom_master_inspectorbot"}], "link_preview_options": {"url": "https://t.me/eom_master_inspectorbot"}}} вызвал ошибку: Can't parse entities: unsupported start tag "начало" at byte offset 40
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 228, in service_report_handler
+    await message.reply(
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 115, in check_result
+    exceptions.BadRequest.detect(description)
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/utils/exceptions.py", line 140, in detect
+    raise err(cls.text or description)
+aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported start tag "начало" at byte offset 40
+2025-10-09 15:00:00,005 - INFO - Running job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-10 15:00:00 +05)" (scheduled at 2025-10-09 15:00:00+05:00)
+2025-10-09 15:00:00,911 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-09 15:00:00,911 - INFO - Job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-10 15:00:00 +05)" executed successfully
+2025-10-09 15:09:16,382 - ERROR - Update {"update_id": 682969833, "message": {"message_id": 558, "from": {"id": 1428218177, "is_bot": false, "first_name": "Айс", "username": "Ais_latte7", "language_code": "ru"}, "chat": {"id": 1428218177, "first_name": "Айс", "username": "Ais_latte7", "type": "private"}, "date": 1760004556, "text": "/service_report", "entities": [{"type": "bot_command", "offset": 0, "length": 15}]}} вызвал ошибку: Can't parse entities: unsupported start tag "начало" at byte offset 40
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 228, in service_report_handler
+    await message.reply(
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 115, in check_result
+    exceptions.BadRequest.detect(description)
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/utils/exceptions.py", line 140, in detect
+    raise err(cls.text or description)
+aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported start tag "начало" at byte offset 40
+2025-10-09 16:28:00,337 - ERROR - Update {"update_id": 682970116, "message": {"message_id": 562, "from": {"id": 1428218177, "is_bot": false, "first_name": "Айс", "username": "Ais_latte7", "language_code": "ru"}, "chat": {"id": 1428218177, "first_name": "Айс", "username": "Ais_latte7", "type": "private"}, "date": 1760009280, "text": "/delete_scooter", "entities": [{"type": "bot_command", "offset": 0, "length": 15}]}} вызвал ошибку: Can't parse entities: unsupported start tag "номер" at byte offset 48
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 366, in delete_scooter_handler
+    await message.reply(
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 115, in check_result
+    exceptions.BadRequest.detect(description)
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/utils/exceptions.py", line 140, in detect
+    raise err(cls.text or description)
+aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported start tag "номер" at byte offset 48
+2025-10-09 23:00:00,004 - INFO - Running job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-10 23:00:00 +05)" (scheduled at 2025-10-09 23:00:00+05:00)
+2025-10-09 23:00:00,969 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-09 23:00:00,969 - INFO - Job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-10 23:00:00 +05)" executed successfully
+2025-10-10 15:00:00,008 - INFO - Running job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-11 15:00:00 +05)" (scheduled at 2025-10-10 15:00:00+05:00)
+2025-10-10 15:00:00,823 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-10 15:00:00,823 - INFO - Job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-11 15:00:00 +05)" executed successfully
+2025-10-10 23:00:00,004 - INFO - Running job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-11 23:00:00 +05)" (scheduled at 2025-10-10 23:00:00+05:00)
+2025-10-10 23:00:01,030 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-10 23:00:01,031 - INFO - Job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-11 23:00:00 +05)" executed successfully
+2025-10-11 13:53:49,137 - ERROR - Update {"update_id": 682975411, "message": {"message_id": 516, "from": {"id": 8272665697, "is_bot": false, "first_name": "evn", "username": "sse_evn", "language_code": "ru"}, "chat": {"id": -1002549279303, "title": "Отчет с 07:00 до 15:00 с 23:00", "type": "supergroup"}, "date": 1760172828, "text": "/find_scooter@eom_master_inspectorbot", "entities": [{"type": "bot_command", "offset": 0, "length": 37}]}} вызвал ошибку: Can't parse entities: unsupported start tag "номер" at byte offset 43
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 316, in find_scooter_handler
+    await message.reply(
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 115, in check_result
+    exceptions.BadRequest.detect(description)
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/utils/exceptions.py", line 140, in detect
+    raise err(cls.text or description)
+aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported start tag "номер" at byte offset 43
+2025-10-11 15:00:00,002 - INFO - Running job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-12 15:00:00 +05)" (scheduled at 2025-10-11 15:00:00+05:00)
+2025-10-11 15:00:00,736 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-11 15:00:00,737 - INFO - Job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-12 15:00:00 +05)" executed successfully
+2025-10-11 21:09:17,136 - INFO - Bot: eom_master_inspector [@eom_master_inspectorbot]
+2025-10-11 21:09:17,383 - WARNING - Updates were skipped successfully.
+2025-10-11 21:09:17,551 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-10-11 21:09:17,551 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-10-11 21:09:17,552 - INFO - Added job "send_scheduled_report" to job store "default"
+2025-10-11 21:09:17,552 - INFO - Added job "send_scheduled_report" to job store "default"
+2025-10-11 21:09:17,552 - INFO - Scheduler started
+2025-10-11 21:09:17,552 - INFO - ✅ Планировщик запущен. Задачи: ['evening_report', 'morning_report']
+2025-10-11 21:09:17,552 - INFO - 📤 REPORT_CHAT_IDS: {-1002549279303}
+2025-10-11 21:09:17,735 - INFO - ✅ Команды бота обновлены
+2025-10-11 21:09:17,735 - INFO - Start polling.
+2025-10-11 21:09:35,025 - ERROR - Update {"update_id": 682976590, "message": {"message_id": 591, "from": {"id": 8272665697, "is_bot": false, "first_name": "evn", "username": "sse_evn", "language_code": "ru"}, "chat": {"id": 8272665697, "first_name": "evn", "username": "sse_evn", "type": "private"}, "date": 1760198974, "text": "/monthly_report", "entities": [{"type": "bot_command", "offset": 0, "length": 15}]}} вызвал ошибку: Can't parse entities: unsupported start tag "месяц" at byte offset 45
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 428, in monthly_report_handler
+    await message.reply(
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 115, in check_result
+    exceptions.BadRequest.detect(description)
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/utils/exceptions.py", line 140, in detect
+    raise err(cls.text or description)
+aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported start tag "месяц" at byte offset 45
+2025-10-11 21:14:22,029 - INFO - Bot: eom_master_inspector [@eom_master_inspectorbot]
+2025-10-11 21:14:22,259 - WARNING - Updates were skipped successfully.
+2025-10-11 21:14:22,351 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-10-11 21:14:22,352 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-10-11 21:14:22,352 - INFO - Added job "send_scheduled_report" to job store "default"
+2025-10-11 21:14:22,352 - INFO - Added job "send_scheduled_report" to job store "default"
+2025-10-11 21:14:22,352 - INFO - Scheduler started
+2025-10-11 21:14:22,352 - INFO - ✅ Планировщик запущен. Задачи: ['evening_report', 'morning_report']
+2025-10-11 21:14:22,352 - INFO - 📤 REPORT_CHAT_IDS: {-1002549279303}
+2025-10-11 21:14:22,495 - INFO - ✅ Команды бота обновлены
+2025-10-11 21:14:22,495 - INFO - Start polling.
+2025-10-11 21:16:35,946 - INFO - Bot: eom_master_inspector [@eom_master_inspectorbot]
+2025-10-11 21:16:36,110 - WARNING - Updates were skipped successfully.
+2025-10-11 21:16:36,207 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-10-11 21:16:36,207 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-10-11 21:16:36,207 - INFO - Added job "send_scheduled_report" to job store "default"
+2025-10-11 21:16:36,207 - INFO - Added job "send_scheduled_report" to job store "default"
+2025-10-11 21:16:36,207 - INFO - Scheduler started
+2025-10-11 21:16:36,207 - INFO - ✅ Планировщик запущен. Задачи: ['evening_report', 'morning_report']
+2025-10-11 21:16:36,208 - INFO - 📤 REPORT_CHAT_IDS: {-1002549279303}
+2025-10-11 21:16:36,537 - INFO - ✅ Команды бота обновлены
+2025-10-11 21:16:36,537 - INFO - Start polling.
