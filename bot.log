@@ -1407,3 +1407,12 @@ aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported st
 2025-10-11 21:16:36,208 - INFO - 📤 REPORT_CHAT_IDS: {-1002549279303}
 2025-10-11 21:16:36,537 - INFO - ✅ Команды бота обновлены
 2025-10-11 21:16:36,537 - INFO - Start polling.
+2025-10-11 23:00:00,001 - INFO - Running job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-12 23:00:00 +05)" (scheduled at 2025-10-11 23:00:00+05:00)
+2025-10-11 23:00:01,215 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-11 23:00:01,215 - INFO - Job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-12 23:00:00 +05)" executed successfully
+2025-10-12 15:00:00,009 - INFO - Running job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-13 15:00:00 +05)" (scheduled at 2025-10-12 15:00:00+05:00)
+2025-10-12 15:00:00,779 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-12 15:00:00,779 - INFO - Job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-13 15:00:00 +05)" executed successfully
+2025-10-12 23:00:00,012 - INFO - Running job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-13 23:00:00 +05)" (scheduled at 2025-10-12 23:00:00+05:00)
+2025-10-12 23:00:01,001 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-12 23:00:01,002 - INFO - Job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-13 23:00:00 +05)" executed successfully
