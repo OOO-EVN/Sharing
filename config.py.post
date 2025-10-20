@@ -1,0 +1,26 @@
+import os
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS", "").split(","))) if os.getenv("ADMIN_IDS") else []
+ALLOWED_CHAT_IDS = list(map(int, os.getenv("ALLOWED_CHAT_IDS", "").split(","))) if os.getenv("ALLOWED_CHAT_IDS") else []
+REPORT_CHAT_IDS = list(map(int, os.getenv("REPORT_CHAT_IDS", "").split(","))) if os.getenv("REPORT_CHAT_IDS") else []
+
+TIMEZONE = __import__('datetime').timezone(__import__('datetime').timedelta(hours=5))
+
+SERVICE_ALIASES = {
+    "яндекс": "Яндекс",
+    "yandex": "Яндекс",
+    "woosh": "Whoosh",
+    "whoosh": "Whoosh",
+    "jet": "Jet",
+    "bolt": "Bolt"
+}
+
+YANDEX_SCOOTER_PATTERN = __import__('re').compile(r'\b(?:[A-Z]{2}\d{6}|[A-Z]{1}\d{7})\b', __import__('re').IGNORECASE)
+WOOSH_SCOOTER_PATTERN = __import__('re').compile(r'\bW\d{7}\b', __import__('re').IGNORECASE)
+JET_SCOOTER_PATTERN = __import__('re').compile(r'\bJ\d{7}\b', __import__('re').IGNORECASE)
+BOLT_SCOOTER_PATTERN = __import__('re').compile(r'\bB\d{7}\b', __import__('re').IGNORECASE)
+BATCH_QUANTITY_PATTERN = __import__('re').compile(r'\b(яндекс|yandex|woosh|whoosh|jet|bolt)\s+(\d+)\b', __import__('re').IGNORECASE)
+
+DB_NAME = "scooters.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/scooters")

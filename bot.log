@@ -1416,3 +1416,803 @@ aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported st
 2025-10-12 23:00:00,012 - INFO - Running job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-13 23:00:00 +05)" (scheduled at 2025-10-12 23:00:00+05:00)
 2025-10-12 23:00:01,001 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
 2025-10-12 23:00:01,002 - INFO - Job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-13 23:00:00 +05)" executed successfully
+2025-10-13 15:00:00,004 - INFO - Running job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-14 15:00:00 +05)" (scheduled at 2025-10-13 15:00:00+05:00)
+2025-10-13 15:00:00,879 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-13 15:00:00,880 - INFO - Job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-14 15:00:00 +05)" executed successfully
+2025-10-13 23:00:00,001 - INFO - Running job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-14 23:00:00 +05)" (scheduled at 2025-10-13 23:00:00+05:00)
+2025-10-13 23:00:00,932 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-13 23:00:00,933 - INFO - Job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-14 23:00:00 +05)" executed successfully
+2025-10-14 12:35:44,850 - ERROR - Update {"update_id": 682984376, "message": {"message_id": 687047, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427338, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760425993}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760425993, "media_group_id": "14083418696219362", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8do7f1JB_DVGj5MhMgX7H1h0LOGBQACb_QxG7_gcUsDyLQMJH11WAEAAwIAA3MAAzYE", "file_unique_id": "AQADb_QxG7_gcUt4", "file_size": 1539, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8do7f1JB_DVGj5MhMgX7H1h0LOGBQACb_QxG7_gcUsDyLQMJH11WAEAAwIAA20AAzYE", "file_unique_id": "AQADb_QxG7_gcUty", "file_size": 28430, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8do7f1JB_DVGj5MhMgX7H1h0LOGBQACb_QxG7_gcUsDyLQMJH11WAEAAwIAA3gAAzYE", "file_unique_id": "AQADb_QxG7_gcUt9", "file_size": 149789, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8do7f1JB_DVGj5MhMgX7H1h0LOGBQACb_QxG7_gcUsDyLQMJH11WAEAAwIAA3kAAzYE", "file_unique_id": "AQADb_QxG7_gcUt-", "file_size": 220325, "width": 960, "height": 1280}], "caption": "258-146"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,859 - ERROR - Update {"update_id": 682984340, "message": {"message_id": 687011, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427337, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760415954}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760415954, "media_group_id": "14083418696219218", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6No7f1J_JcWCAcoM7yX7cAx9S2nGAAChvMxG7_gcUsAATP7xfO6njcBAAMCAANzAAM2BA", "file_unique_id": "AQADhvMxG7_gcUt4", "file_size": 1947, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6No7f1J_JcWCAcoM7yX7cAx9S2nGAAChvMxG7_gcUsAATP7xfO6njcBAAMCAANtAAM2BA", "file_unique_id": "AQADhvMxG7_gcUty", "file_size": 36938, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6No7f1J_JcWCAcoM7yX7cAx9S2nGAAChvMxG7_gcUsAATP7xfO6njcBAAMCAAN4AAM2BA", "file_unique_id": "AQADhvMxG7_gcUt9", "file_size": 215181, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6No7f1J_JcWCAcoM7yX7cAx9S2nGAAChvMxG7_gcUsAATP7xfO6njcBAAMCAAN5AAM2BA", "file_unique_id": "AQADhvMxG7_gcUt-", "file_size": 345818, "width": 960, "height": 1280}], "caption": "249-699\n\nAD7488"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,860 - ERROR - Update {"update_id": 682984366, "message": {"message_id": 687037, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427337, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760423519}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760423519, "media_group_id": "14083418696219322", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe71o7f1JcHrOYItZrfEpl9VP9NTXxQACNvQxG7_gcUu1M6mdFih41gEAAwIAA3MAAzYE", "file_unique_id": "AQADNvQxG7_gcUt4", "file_size": 1844, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe71o7f1JcHrOYItZrfEpl9VP9NTXxQACNvQxG7_gcUu1M6mdFih41gEAAwIAA20AAzYE", "file_unique_id": "AQADNvQxG7_gcUty", "file_size": 31999, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe71o7f1JcHrOYItZrfEpl9VP9NTXxQACNvQxG7_gcUu1M6mdFih41gEAAwIAA3gAAzYE", "file_unique_id": "AQADNvQxG7_gcUt9", "file_size": 175046, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe71o7f1JcHrOYItZrfEpl9VP9NTXxQACNvQxG7_gcUu1M6mdFih41gEAAwIAA3kAAzYE", "file_unique_id": "AQADNvQxG7_gcUt-", "file_size": 266964, "width": 960, "height": 1280}], "caption": "AE1977\nAM6546\n\n257-186"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,861 - ERROR - Update {"update_id": 682984350, "message": {"message_id": 687021, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427337, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760417172}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760417172, "media_group_id": "14083418696219258", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe61o7f1JgaOjCUMAAWnFLwbmy3yXrb8AApfzMRu_4HFLftKZbA0EMREBAAMCAANzAAM2BA", "file_unique_id": "AQADl_MxG7_gcUt4", "file_size": 1779, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe61o7f1JgaOjCUMAAWnFLwbmy3yXrb8AApfzMRu_4HFLftKZbA0EMREBAAMCAANtAAM2BA", "file_unique_id": "AQADl_MxG7_gcUty", "file_size": 31068, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe61o7f1JgaOjCUMAAWnFLwbmy3yXrb8AApfzMRu_4HFLftKZbA0EMREBAAMCAAN4AAM2BA", "file_unique_id": "AQADl_MxG7_gcUt9", "file_size": 165251, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe61o7f1JgaOjCUMAAWnFLwbmy3yXrb8AApfzMRu_4HFLftKZbA0EMREBAAMCAAN5AAM2BA", "file_unique_id": "AQADl_MxG7_gcUt-", "file_size": 248432, "width": 960, "height": 1280}], "caption": "2798\n\n00854061\n00152681"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,861 - ERROR - Update {"update_id": 682984372, "message": {"message_id": 687043, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427338, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760425383}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760425383, "media_group_id": "14083418696219346", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8No7f1JAAFvyjD458z0oNHyPOiSgkkAAlz0MRu_4HFLb014S5MRoksBAAMCAANzAAM2BA", "file_unique_id": "AQADXPQxG7_gcUt4", "file_size": 1649, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8No7f1JAAFvyjD458z0oNHyPOiSgkkAAlz0MRu_4HFLb014S5MRoksBAAMCAANtAAM2BA", "file_unique_id": "AQADXPQxG7_gcUty", "file_size": 31243, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8No7f1JAAFvyjD458z0oNHyPOiSgkkAAlz0MRu_4HFLb014S5MRoksBAAMCAAN4AAM2BA", "file_unique_id": "AQADXPQxG7_gcUt9", "file_size": 183013, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8No7f1JAAFvyjD458z0oNHyPOiSgkkAAlz0MRu_4HFLb014S5MRoksBAAMCAAN5AAM2BA", "file_unique_id": "AQADXPQxG7_gcUt-", "file_size": 283887, "width": 960, "height": 1280}], "caption": "256-417"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,862 - ERROR - Update {"update_id": 682984342, "message": {"message_id": 687013, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427337, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760416307}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760416307, "media_group_id": "14083418696219226", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6Vo7f1JYw19NgiZ0LO2xwkOEfucLgACivMxG7_gcUvAXMwKmyzZTwEAAwIAA3MAAzYE", "file_unique_id": "AQADivMxG7_gcUt4", "file_size": 1985, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6Vo7f1JYw19NgiZ0LO2xwkOEfucLgACivMxG7_gcUvAXMwKmyzZTwEAAwIAA20AAzYE", "file_unique_id": "AQADivMxG7_gcUty", "file_size": 38950, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6Vo7f1JYw19NgiZ0LO2xwkOEfucLgACivMxG7_gcUvAXMwKmyzZTwEAAwIAA3gAAzYE", "file_unique_id": "AQADivMxG7_gcUt9", "file_size": 227774, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6Vo7f1JYw19NgiZ0LO2xwkOEfucLgACivMxG7_gcUvAXMwKmyzZTwEAAwIAA3kAAzYE", "file_unique_id": "AQADivMxG7_gcUt-", "file_size": 366741, "width": 960, "height": 1280}], "caption": "00249599\n00372262\n00188979\n00540972\n00761173\n\nAD8170\n\n254-420\n255-428"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,863 - ERROR - Update {"update_id": 682984382, "message": {"message_id": 687053, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427338, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760426333}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760426333, "media_group_id": "14083418696219386", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe81o7f1JpIqst1XfhVddzKnqhqLwlAAChvQxG7_gcUup_oW4VjKnEAEAAwIAA3MAAzYE", "file_unique_id": "AQADhvQxG7_gcUt4", "file_size": 1587, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe81o7f1JpIqst1XfhVddzKnqhqLwlAAChvQxG7_gcUup_oW4VjKnEAEAAwIAA20AAzYE", "file_unique_id": "AQADhvQxG7_gcUty", "file_size": 28434, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe81o7f1JpIqst1XfhVddzKnqhqLwlAAChvQxG7_gcUup_oW4VjKnEAEAAwIAA3gAAzYE", "file_unique_id": "AQADhvQxG7_gcUt9", "file_size": 152161, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe81o7f1JpIqst1XfhVddzKnqhqLwlAAChvQxG7_gcUup_oW4VjKnEAEAAwIAA3kAAzYE", "file_unique_id": "AQADhvQxG7_gcUt-", "file_size": 222658, "width": 960, "height": 1280}], "caption": "AB6421"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,864 - ERROR - Update {"update_id": 682984360, "message": {"message_id": 687031, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427337, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760422450}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760422450, "media_group_id": "14083418696219298", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7do7f1JvDJmMnO_kX1mXXw_UI5eaQACHfQxG7_gcUuEwaorhGqQYAEAAwIAA3MAAzYE", "file_unique_id": "AQADHfQxG7_gcUt4", "file_size": 1874, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7do7f1JvDJmMnO_kX1mXXw_UI5eaQACHfQxG7_gcUuEwaorhGqQYAEAAwIAA20AAzYE", "file_unique_id": "AQADHfQxG7_gcUty", "file_size": 30123, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7do7f1JvDJmMnO_kX1mXXw_UI5eaQACHfQxG7_gcUuEwaorhGqQYAEAAwIAA3gAAzYE", "file_unique_id": "AQADHfQxG7_gcUt9", "file_size": 148531, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7do7f1JvDJmMnO_kX1mXXw_UI5eaQACHfQxG7_gcUuEwaorhGqQYAEAAwIAA3kAAzYE", "file_unique_id": "AQADHfQxG7_gcUt-", "file_size": 214438, "width": 960, "height": 1280}], "caption": "00294047\n00673929\n00705921"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,864 - ERROR - Update {"update_id": 682984358, "message": {"message_id": 687029, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427337, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760422105}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760422105, "media_group_id": "14083418696219290", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7Vo7f1JjiHQz0c4NBwM9UGegynhfAACE_QxG7_gcUs4O9D6O-7yFgEAAwIAA3MAAzYE", "file_unique_id": "AQADE_QxG7_gcUt4", "file_size": 1704, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7Vo7f1JjiHQz0c4NBwM9UGegynhfAACE_QxG7_gcUs4O9D6O-7yFgEAAwIAA20AAzYE", "file_unique_id": "AQADE_QxG7_gcUty", "file_size": 34930, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7Vo7f1JjiHQz0c4NBwM9UGegynhfAACE_QxG7_gcUs4O9D6O-7yFgEAAwIAA3gAAzYE", "file_unique_id": "AQADE_QxG7_gcUt9", "file_size": 205113, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7Vo7f1JjiHQz0c4NBwM9UGegynhfAACE_QxG7_gcUs4O9D6O-7yFgEAAwIAA3kAAzYE", "file_unique_id": "AQADE_QxG7_gcUt-", "file_size": 319479, "width": 960, "height": 1280}], "caption": "1104\n\n249-024\n\n00250019"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,865 - ERROR - Update {"update_id": 682984380, "message": {"message_id": 687051, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427338, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760426206}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760426206, "media_group_id": "14083418696219378", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8to7f1JARxUcOMuhIGRU9jbcNmCAQACgPQxG7_gcUvNiCbtCDlwyAEAAwIAA3MAAzYE", "file_unique_id": "AQADgPQxG7_gcUt4", "file_size": 1485, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8to7f1JARxUcOMuhIGRU9jbcNmCAQACgPQxG7_gcUvNiCbtCDlwyAEAAwIAA20AAzYE", "file_unique_id": "AQADgPQxG7_gcUty", "file_size": 26836, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8to7f1JARxUcOMuhIGRU9jbcNmCAQACgPQxG7_gcUvNiCbtCDlwyAEAAwIAA3gAAzYE", "file_unique_id": "AQADgPQxG7_gcUt9", "file_size": 154102, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8to7f1JARxUcOMuhIGRU9jbcNmCAQACgPQxG7_gcUvNiCbtCDlwyAEAAwIAA3kAAzYE", "file_unique_id": "AQADgPQxG7_gcUt-", "file_size": 239066, "width": 960, "height": 1280}], "caption": "AM8933"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,869 - ERROR - Update {"update_id": 682984334, "message": {"message_id": 687005, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427337, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760415435}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760415435, "media_group_id": "14083418696219194", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe51o7f1JrdZNPGAOpwcYgKOzyJXEIwACf_MxG7_gcUt5KZKLy5clQgEAAwIAA3MAAzYE", "file_unique_id": "AQADf_MxG7_gcUt4", "file_size": 1490, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe51o7f1JrdZNPGAOpwcYgKOzyJXEIwACf_MxG7_gcUt5KZKLy5clQgEAAwIAA20AAzYE", "file_unique_id": "AQADf_MxG7_gcUty", "file_size": 28705, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe51o7f1JrdZNPGAOpwcYgKOzyJXEIwACf_MxG7_gcUt5KZKLy5clQgEAAwIAA3gAAzYE", "file_unique_id": "AQADf_MxG7_gcUt9", "file_size": 171643, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe51o7f1JrdZNPGAOpwcYgKOzyJXEIwACf_MxG7_gcUt5KZKLy5clQgEAAwIAA3kAAzYE", "file_unique_id": "AQADf_MxG7_gcUt-", "file_size": 275967, "width": 960, "height": 1280}], "caption": "00361893\n00548728"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,874 - ERROR - Update {"update_id": 682984346, "message": {"message_id": 687017, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427337, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760416696}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760416696, "media_group_id": "14083418696219242", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6lo7f1JJjWRG9WBPeD50DxmSDafnwACkPMxG7_gcUvd06uYfuGdJgEAAwIAA3MAAzYE", "file_unique_id": "AQADkPMxG7_gcUt4", "file_size": 1723, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6lo7f1JJjWRG9WBPeD50DxmSDafnwACkPMxG7_gcUvd06uYfuGdJgEAAwIAA20AAzYE", "file_unique_id": "AQADkPMxG7_gcUty", "file_size": 34902, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6lo7f1JJjWRG9WBPeD50DxmSDafnwACkPMxG7_gcUvd06uYfuGdJgEAAwIAA3gAAzYE", "file_unique_id": "AQADkPMxG7_gcUt9", "file_size": 207747, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6lo7f1JJjWRG9WBPeD50DxmSDafnwACkPMxG7_gcUvd06uYfuGdJgEAAwIAA3kAAzYE", "file_unique_id": "AQADkPMxG7_gcUt-", "file_size": 334232, "width": 960, "height": 1280}], "caption": "249-215"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,884 - ERROR - Update {"update_id": 682984370, "message": {"message_id": 687041, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427338, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760424181}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760424181, "media_group_id": "14083418696219338", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8Fo7f1JN5pwOtD4bXwMss1yF0RfgAACP_QxG7_gcUsoIVc3ZcTFrwEAAwIAA3MAAzYE", "file_unique_id": "AQADP_QxG7_gcUt4", "file_size": 1561, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8Fo7f1JN5pwOtD4bXwMss1yF0RfgAACP_QxG7_gcUsoIVc3ZcTFrwEAAwIAA20AAzYE", "file_unique_id": "AQADP_QxG7_gcUty", "file_size": 30210, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8Fo7f1JN5pwOtD4bXwMss1yF0RfgAACP_QxG7_gcUsoIVc3ZcTFrwEAAwIAA3gAAzYE", "file_unique_id": "AQADP_QxG7_gcUt9", "file_size": 168920, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe8Fo7f1JN5pwOtD4bXwMss1yF0RfgAACP_QxG7_gcUsoIVc3ZcTFrwEAAwIAA3kAAzYE", "file_unique_id": "AQADP_QxG7_gcUt-", "file_size": 259998, "width": 960, "height": 1280}], "caption": "AM6966\nAM6833\n\n00572737"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,887 - ERROR - Update {"update_id": 682984362, "message": {"message_id": 687033, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427337, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760422528}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760422528, "media_group_id": "14083418696219306", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7lo7f1JanLVeV3IlSaH0y0qht3OkQACH_QxG7_gcUss0OerSo9pbgEAAwIAA3MAAzYE", "file_unique_id": "AQADH_QxG7_gcUt4", "file_size": 1764, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7lo7f1JanLVeV3IlSaH0y0qht3OkQACH_QxG7_gcUss0OerSo9pbgEAAwIAA20AAzYE", "file_unique_id": "AQADH_QxG7_gcUty", "file_size": 35612, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7lo7f1JanLVeV3IlSaH0y0qht3OkQACH_QxG7_gcUss0OerSo9pbgEAAwIAA3gAAzYE", "file_unique_id": "AQADH_QxG7_gcUt9", "file_size": 209954, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7lo7f1JanLVeV3IlSaH0y0qht3OkQACH_QxG7_gcUss0OerSo9pbgEAAwIAA3kAAzYE", "file_unique_id": "AQADH_QxG7_gcUt-", "file_size": 334871, "width": 960, "height": 1280}], "caption": "00232653"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,917 - ERROR - Update {"update_id": 682984364, "message": {"message_id": 687035, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427337, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760423069}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760423069, "media_group_id": "14083418696219314", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7to7f1JKzd9Arq_m74hCVTAuQemZwACMfQxG7_gcUvOhG8VRmCP4gEAAwIAA3MAAzYE", "file_unique_id": "AQADMfQxG7_gcUt4", "file_size": 1671, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7to7f1JKzd9Arq_m74hCVTAuQemZwACMfQxG7_gcUvOhG8VRmCP4gEAAwIAA20AAzYE", "file_unique_id": "AQADMfQxG7_gcUty", "file_size": 29376, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7to7f1JKzd9Arq_m74hCVTAuQemZwACMfQxG7_gcUvOhG8VRmCP4gEAAwIAA3gAAzYE", "file_unique_id": "AQADMfQxG7_gcUt9", "file_size": 163878, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe7to7f1JKzd9Arq_m74hCVTAuQemZwACMfQxG7_gcUvOhG8VRmCP4gEAAwIAA3kAAzYE", "file_unique_id": "AQADMfQxG7_gcUt-", "file_size": 253292, "width": 960, "height": 1280}], "caption": "AD9253\nAM9324\n\n250-497\n258-755"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 12:35:44,962 - ERROR - Update {"update_id": 682984344, "message": {"message_id": 687015, "from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760427337, "forward_origin": {"type": "user", "sender_user": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "date": 1760416495}, "forward_from": {"id": 6956171942, "is_bot": false, "first_name": "adik", "username": "Adilkhan_06"}, "forward_date": 1760416495, "media_group_id": "14083418696219234", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6do7f1JwSt55nj9Eb_TphEq35pv9gACjfMxG7_gcUte6I0DJbTA-gEAAwIAA3MAAzYE", "file_unique_id": "AQADjfMxG7_gcUt4", "file_size": 1927, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6do7f1JwSt55nj9Eb_TphEq35pv9gACjfMxG7_gcUte6I0DJbTA-gEAAwIAA20AAzYE", "file_unique_id": "AQADjfMxG7_gcUty", "file_size": 38054, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6do7f1JwSt55nj9Eb_TphEq35pv9gACjfMxG7_gcUte6I0DJbTA-gEAAwIAA3gAAzYE", "file_unique_id": "AQADjfMxG7_gcUt9", "file_size": 220452, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKe6do7f1JwSt55nj9Eb_TphEq35pv9gACjfMxG7_gcUte6I0DJbTA-gEAAwIAA3kAAzYE", "file_unique_id": "AQADjfMxG7_gcUt-", "file_size": 345370, "width": 960, "height": 1280}], "caption": "253-971\n256-804\n253-835"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-14 15:00:00,005 - INFO - Running job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-15 15:00:00 +05)" (scheduled at 2025-10-14 15:00:00+05:00)
+2025-10-14 15:00:01,016 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-14 15:00:01,017 - INFO - Job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-15 15:00:00 +05)" executed successfully
+2025-10-15 09:10:46,273 - WARNING - Goodbye!
+2025-10-15 09:10:52,467 - INFO - Bot: eom_master_inspector [@eom_master_inspectorbot]
+2025-10-15 09:10:52,625 - WARNING - Updates were skipped successfully.
+2025-10-15 09:10:52,718 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-10-15 09:10:52,718 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-10-15 09:10:52,719 - INFO - Added job "send_scheduled_report" to job store "default"
+2025-10-15 09:10:52,719 - INFO - Added job "send_scheduled_report" to job store "default"
+2025-10-15 09:10:52,719 - INFO - Scheduler started
+2025-10-15 09:10:52,719 - INFO - ✅ Планировщик запущен. Задачи: ['morning_report', 'evening_report']
+2025-10-15 09:10:52,720 - INFO - 📤 REPORT_CHAT_IDS: {-1002549279303}
+2025-10-15 09:10:52,807 - INFO - ✅ Команды бота обновлены
+2025-10-15 09:10:52,807 - INFO - Start polling.
+2025-10-15 15:00:00,003 - INFO - Running job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-16 15:00:00 +05)" (scheduled at 2025-10-15 15:00:00+05:00)
+2025-10-15 15:00:01,126 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-15 15:00:01,126 - INFO - Job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-16 15:00:00 +05)" executed successfully
+2025-10-15 23:00:00,005 - INFO - Running job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-16 23:00:00 +05)" (scheduled at 2025-10-15 23:00:00+05:00)
+2025-10-15 23:00:01,201 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-15 23:00:01,202 - INFO - Job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-16 23:00:00 +05)" executed successfully
+2025-10-16 04:30:17,058 - ERROR - Update {"update_id": 682990498, "message": {"message_id": 705, "from": {"id": 7290788782, "is_bot": false, "first_name": "evn", "username": "sse_ev1n", "language_code": "ru"}, "chat": {"id": 7290788782, "first_name": "evn", "username": "sse_ev1n", "type": "private"}, "date": 1760571016, "text": "/service_report", "entities": [{"type": "bot_command", "offset": 0, "length": 15}]}} вызвал ошибку: Can't parse entities: unsupported start tag "начало" at byte offset 40
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 229, in service_report_handler
+    await message.reply(
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 115, in check_result
+    exceptions.BadRequest.detect(description)
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/utils/exceptions.py", line 140, in detect
+    raise err(cls.text or description)
+aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported start tag "начало" at byte offset 40
+2025-10-16 07:35:11,115 - ERROR - Update {"update_id": 682990749, "message": {"message_id": 713, "from": {"id": 1428218177, "is_bot": false, "first_name": "Айс", "username": "Ais_latte7", "language_code": "ru"}, "chat": {"id": 1428218177, "first_name": "Айс", "username": "Ais_latte7", "type": "private"}, "date": 1760582110, "text": "/service_report", "entities": [{"type": "bot_command", "offset": 0, "length": 15}]}} вызвал ошибку: Can't parse entities: unsupported start tag "начало" at byte offset 40
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 229, in service_report_handler
+    await message.reply(
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 115, in check_result
+    exceptions.BadRequest.detect(description)
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/utils/exceptions.py", line 140, in detect
+    raise err(cls.text or description)
+aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported start tag "начало" at byte offset 40
+2025-10-16 15:00:00,010 - INFO - Running job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-17 15:00:00 +05)" (scheduled at 2025-10-16 15:00:00+05:00)
+2025-10-16 15:00:00,910 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-16 15:00:00,910 - INFO - Job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-17 15:00:00 +05)" executed successfully
+2025-10-16 23:00:00,008 - INFO - Running job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-17 23:00:00 +05)" (scheduled at 2025-10-16 23:00:00+05:00)
+2025-10-16 23:01:00,410 - ERROR - ❌ Ошибка отправки Excel в -1002549279303: Aiohttp client throws an error: ClientConnectorError: Cannot connect to host api.telegram.org:443 ssl:default [Network is unreachable]
+2025-10-16 23:01:00,410 - INFO - Job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-17 23:00:00 +05)" executed successfully
+2025-10-17 05:53:37,722 - ERROR - Update {"update_id": 682993258, "message": {"message_id": 726, "from": {"id": 1428218177, "is_bot": false, "first_name": "Айс", "username": "Ais_latte7", "language_code": "ru"}, "chat": {"id": 1428218177, "first_name": "Айс", "username": "Ais_latte7", "type": "private"}, "date": 1760662417, "text": "/service_report", "entities": [{"type": "bot_command", "offset": 0, "length": 15}]}} вызвал ошибку: Can't parse entities: unsupported start tag "начало" at byte offset 40
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 229, in service_report_handler
+    await message.reply(
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 115, in check_result
+    exceptions.BadRequest.detect(description)
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/utils/exceptions.py", line 140, in detect
+    raise err(cls.text or description)
+aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported start tag "начало" at byte offset 40
+2025-10-17 09:10:16,022 - ERROR - Update {"update_id": 682993492, "message": {"message_id": 727, "from": {"id": 1428218177, "is_bot": false, "first_name": "Айс", "username": "Ais_latte7", "language_code": "ru"}, "chat": {"id": 1428218177, "first_name": "Айс", "username": "Ais_latte7", "type": "private"}, "date": 1760674215, "text": "/service_report", "entities": [{"type": "bot_command", "offset": 0, "length": 15}]}} вызвал ошибку: Can't parse entities: unsupported start tag "начало" at byte offset 40
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 229, in service_report_handler
+    await message.reply(
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 115, in check_result
+    exceptions.BadRequest.detect(description)
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/utils/exceptions.py", line 140, in detect
+    raise err(cls.text or description)
+aiogram.utils.exceptions.CantParseEntities: Can't parse entities: unsupported start tag "начало" at byte offset 40
+2025-10-17 15:00:00,007 - INFO - Running job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-18 15:00:00 +05)" (scheduled at 2025-10-17 15:00:00+05:00)
+2025-10-17 15:00:00,692 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-17 15:00:00,692 - INFO - Job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-18 15:00:00 +05)" executed successfully
+2025-10-17 22:28:07,153 - ERROR - Cause exception while getting updates.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 381, in start_polling
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 110, in get_updates
+    result = await self.request(api.Methods.GET_UPDATES, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 139, in make_request
+    async with session.post(url, data=req, **kwargs) as response:
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiohttp/client.py", line 1167, in __aenter__
+    self._resp = await self._coro
+                 ^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiohttp/client.py", line 586, in _request
+    await resp.start(conn)
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiohttp/client_reqrep.py", line 900, in start
+    with self._timer:
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiohttp/helpers.py", line 725, in __exit__
+    raise asyncio.TimeoutError from None
+TimeoutError
+2025-10-17 22:28:18,577 - ERROR - Update {"update_id": 682995844, "message": {"message_id": 703063, "from": {"id": 7034617489, "is_bot": false, "first_name": "Hzmd", "username": "Ansar92u", "language_code": "ru"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760722094, "media_group_id": "14085776752757458", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKuldo8nyu3Gpmah-sNFAC0HxTz8ZT3QACigsyGytGkUslg7ql0WPeewEAAwIAA3MAAzYE", "file_unique_id": "AQADigsyGytGkUt4", "file_size": 1517, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKuldo8nyu3Gpmah-sNFAC0HxTz8ZT3QACigsyGytGkUslg7ql0WPeewEAAwIAA20AAzYE", "file_unique_id": "AQADigsyGytGkUty", "file_size": 25657, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKuldo8nyu3Gpmah-sNFAC0HxTz8ZT3QACigsyGytGkUslg7ql0WPeewEAAwIAA3gAAzYE", "file_unique_id": "AQADigsyGytGkUt9", "file_size": 124965, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKuldo8nyu3Gpmah-sNFAC0HxTz8ZT3QACigsyGytGkUslg7ql0WPeewEAAwIAA3kAAzYE", "file_unique_id": "AQADigsyGytGkUt-", "file_size": 249335, "width": 960, "height": 1280}], "caption": "Aa9118"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-17 22:28:18,587 - ERROR - Update {"update_id": 682995831, "message": {"message_id": 703044, "from": {"id": 1162831176, "is_bot": false, "first_name": "Ерасыл Кинбаев", "username": "kinbaevv"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760722041, "media_group_id": "14085776329593378", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKukRo8nx5qMD0XZJl2vGIK2upCpMIqwACegsyGytGkUv1j1XqIj-MnAEAAwIAA3MAAzYE", "file_unique_id": "AQADegsyGytGkUt4", "file_size": 1637, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKukRo8nx5qMD0XZJl2vGIK2upCpMIqwACegsyGytGkUv1j1XqIj-MnAEAAwIAA20AAzYE", "file_unique_id": "AQADegsyGytGkUty", "file_size": 26742, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKukRo8nx5qMD0XZJl2vGIK2upCpMIqwACegsyGytGkUv1j1XqIj-MnAEAAwIAA3gAAzYE", "file_unique_id": "AQADegsyGytGkUt9", "file_size": 120736, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKukRo8nx5qMD0XZJl2vGIK2upCpMIqwACegsyGytGkUv1j1XqIj-MnAEAAwIAA3kAAzYE", "file_unique_id": "AQADegsyGytGkUt-", "file_size": 167521, "width": 960, "height": 1280}], "caption": "0117\n254080\n256171"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-17 22:28:18,594 - ERROR - Update {"update_id": 682995811, "message": {"message_id": 703024, "from": {"id": 858575801, "is_bot": false, "first_name": "тіma?", "username": "timazaurrr", "language_code": "ru"}, "chat": {"id": -1002602263991, "title": "Отчёты скаутов Е.О.М", "type": "supergroup"}, "date": 1760721811, "media_group_id": "14085774491785482", "photo": [{"file_id": "AgACAgIAAyEFAASbG2W3AAEKujBo8nuT991Qb87NuN1ZUZKaQeJw9gACYwsyGytGkUs8dZzgUpaRDQEAAwIAA3MAAzYE", "file_unique_id": "AQADYwsyGytGkUt4", "file_size": 1440, "width": 67, "height": 90}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKujBo8nuT991Qb87NuN1ZUZKaQeJw9gACYwsyGytGkUs8dZzgUpaRDQEAAwIAA20AAzYE", "file_unique_id": "AQADYwsyGytGkUty", "file_size": 24144, "width": 240, "height": 320}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKujBo8nuT991Qb87NuN1ZUZKaQeJw9gACYwsyGytGkUs8dZzgUpaRDQEAAwIAA3gAAzYE", "file_unique_id": "AQADYwsyGytGkUt9", "file_size": 106126, "width": 600, "height": 800}, {"file_id": "AgACAgIAAyEFAASbG2W3AAEKujBo8nuT991Qb87NuN1ZUZKaQeJw9gACYwsyGytGkUs8dZzgUpaRDQEAAwIAA3kAAzYE", "file_unique_id": "AQADYwsyGytGkUt-", "file_size": 142215, "width": 960, "height": 1280}], "caption": "Ае0312\nАм5555\nАм6389\nАм8179\n00828651\n00998414\n00806217\n256420"}} вызвал ошибку: Flood control exceeded. Retry in 5 seconds.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 256, in process_update
+    return await self.message_handlers.notify(update.message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/handler.py", line 117, in notify
+    response = await handler_obj.handler(*args, **partial_data)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/handlers.py", line 103, in handle_photo_messages
+    await process_scooter_text(message, message.caption)
+  File "/root/tg_bot/Sharing/handlers.py", line 93, in process_scooter_text
+    await message.reply("\n".join(response_parts), parse_mode="HTML")
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/types/message.py", line 1687, in reply
+    return await self.bot.send_message(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 346, in send_message
+    result = await self.request(api.Methods.SEND_MESSAGE, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 111, in check_result
+    raise exceptions.RetryAfter(parameters.retry_after)
+aiogram.utils.exceptions.RetryAfter: Flood control exceeded. Retry in 5 seconds.
+2025-10-17 23:00:00,007 - INFO - Running job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-18 23:00:00 +05)" (scheduled at 2025-10-17 23:00:00+05:00)
+2025-10-17 23:00:00,960 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-17 23:00:00,960 - INFO - Job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-18 23:00:00 +05)" executed successfully
+2025-10-18 06:10:41,715 - ERROR - Cause exception while getting updates.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 381, in start_polling
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 110, in get_updates
+    result = await self.request(api.Methods.GET_UPDATES, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 140, in make_request
+    return check_result(method, response.content_type, response.status, await response.text())
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 128, in check_result
+    raise exceptions.TelegramAPIError(description)
+aiogram.utils.exceptions.TelegramAPIError: Bad Gateway
+2025-10-18 14:28:31,923 - INFO - Bot: eom_master_inspector [@eom_master_inspectorbot]
+2025-10-18 14:28:32,082 - WARNING - Updates were skipped successfully.
+2025-10-18 14:28:32,162 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-10-18 14:28:32,163 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-10-18 14:28:32,163 - INFO - Added job "send_scheduled_report" to job store "default"
+2025-10-18 14:28:32,163 - INFO - Added job "send_scheduled_report" to job store "default"
+2025-10-18 14:28:32,163 - INFO - Scheduler started
+2025-10-18 14:28:32,163 - INFO - ✅ Планировщик запущен. Задачи: ['morning_report', 'evening_report']
+2025-10-18 14:28:32,163 - INFO - 📤 REPORT_CHAT_IDS: {-1002549279303}
+2025-10-18 14:28:32,258 - INFO - ✅ Команды бота обновлены
+2025-10-18 14:28:32,258 - INFO - Start polling.
+2025-10-18 14:28:39,849 - INFO - Bot: eom_master_inspector [@eom_master_inspectorbot]
+2025-10-18 14:28:40,011 - WARNING - Updates were skipped successfully.
+2025-10-18 14:28:40,107 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-10-18 14:28:40,107 - INFO - Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2025-10-18 14:28:40,107 - INFO - Added job "send_scheduled_report" to job store "default"
+2025-10-18 14:28:40,107 - INFO - Added job "send_scheduled_report" to job store "default"
+2025-10-18 14:28:40,107 - INFO - Scheduler started
+2025-10-18 14:28:40,108 - INFO - ✅ Планировщик запущен. Задачи: ['morning_report', 'evening_report']
+2025-10-18 14:28:40,108 - INFO - 📤 REPORT_CHAT_IDS: {-1002549279303}
+2025-10-18 14:28:40,226 - INFO - ✅ Команды бота обновлены
+2025-10-18 14:28:40,227 - INFO - Start polling.
+2025-10-18 15:00:00,005 - INFO - Running job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-19 15:00:00 +05)" (scheduled at 2025-10-18 15:00:00+05:00)
+2025-10-18 15:00:00,926 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-18 15:00:00,927 - INFO - Job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-19 15:00:00 +05)" executed successfully
+2025-10-18 22:49:01,319 - ERROR - Cause exception while getting updates.
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiohttp/connector.py", line 980, in _wrap_create_connection
+    return await self._loop.create_connection(*args, **kwargs)  # type: ignore[return-value]  # noqa
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/asyncio/base_events.py", line 1086, in create_connection
+    raise exceptions[0]
+  File "/usr/lib/python3.11/asyncio/base_events.py", line 1070, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/asyncio/base_events.py", line 974, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "/usr/lib/python3.11/asyncio/selector_events.py", line 638, in sock_connect
+    return await fut
+           ^^^^^^^^^
+  File "/usr/lib/python3.11/asyncio/selector_events.py", line 646, in _sock_connect
+    sock.connect(address)
+OSError: [Errno 101] Network is unreachable
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 139, in make_request
+    async with session.post(url, data=req, **kwargs) as response:
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiohttp/client.py", line 1167, in __aenter__
+    self._resp = await self._coro
+                 ^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiohttp/client.py", line 562, in _request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiohttp/connector.py", line 540, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiohttp/connector.py", line 901, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiohttp/connector.py", line 1209, in _create_direct_connection
+    raise last_exc
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiohttp/connector.py", line 1178, in _create_direct_connection
+    transp, proto = await self._wrap_create_connection(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiohttp/connector.py", line 988, in _wrap_create_connection
+    raise client_error(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorError: Cannot connect to host api.telegram.org:443 ssl:default [Network is unreachable]
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/dispatcher/dispatcher.py", line 381, in start_polling
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/bot.py", line 110, in get_updates
+    result = await self.request(api.Methods.GET_UPDATES, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/tg_bot/Sharing/venv/lib/python3.11/site-packages/aiogram/bot/api.py", line 142, in make_request
+    raise exceptions.NetworkError(f"aiohttp client throws an error: {e.__class__.__name__}: {e}")
+aiogram.utils.exceptions.NetworkError: Aiohttp client throws an error: ClientConnectorError: Cannot connect to host api.telegram.org:443 ssl:default [Network is unreachable]
+2025-10-18 23:00:00,003 - INFO - Running job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-19 23:00:00 +05)" (scheduled at 2025-10-18 23:00:00+05:00)
+2025-10-18 23:00:00,971 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-18 23:00:00,972 - INFO - Job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-19 23:00:00 +05)" executed successfully
+2025-10-19 15:00:00,015 - INFO - Running job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-20 15:00:00 +05)" (scheduled at 2025-10-19 15:00:00+05:00)
+2025-10-19 15:00:01,407 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-19 15:00:01,408 - INFO - Job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-20 15:00:00 +05)" executed successfully
+2025-10-19 23:00:00,004 - INFO - Running job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-20 23:00:00 +05)" (scheduled at 2025-10-19 23:00:00+05:00)
+2025-10-19 23:00:01,077 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-19 23:00:01,078 - INFO - Job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-20 23:00:00 +05)" executed successfully
+2025-10-20 15:00:00,016 - INFO - Running job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-21 15:00:00 +05)" (scheduled at 2025-10-20 15:00:00+05:00)
+2025-10-20 15:00:00,745 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-20 15:00:00,745 - INFO - Job "send_scheduled_report (trigger: cron[hour='15', minute='0'], next run at: 2025-10-21 15:00:00 +05)" executed successfully
+2025-10-20 23:00:00,070 - INFO - Running job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-21 23:00:00 +05)" (scheduled at 2025-10-20 23:00:00+05:00)
+2025-10-20 23:00:03,554 - INFO - ✅ Excel-отчёт отправлен в -1002549279303
+2025-10-20 23:00:03,555 - INFO - Job "send_scheduled_report (trigger: cron[hour='23', minute='0'], next run at: 2025-10-21 23:00:00 +05)" executed successfully

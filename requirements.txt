@@ -2,3 +2,4 @@ aiogram==2.25.1
 openpyxl
 python-doten
 aiosqlite
+asyncpg

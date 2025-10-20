@@ -1,0 +1,90 @@
+# database.py
+import os
+import logging
+import asyncpg
+from config import DATABASE_URL
+import datetime
+
+_pool = None
+
+async def init_db():
+    global _pool
+    logging.info("Подключение к PostgreSQL...")
+    _pool = await asyncpg.create_pool(DATABASE_URL)
+
+    await _pool.execute('''
+        CREATE TABLE IF NOT EXISTS accepted_scooters (
+            id SERIAL PRIMARY KEY,
+            scooter_number TEXT NOT NULL,
+            service TEXT NOT NULL,
+            accepted_by_user_id BIGINT NOT NULL,
+            accepted_by_username TEXT,
+            accepted_by_fullname TEXT NOT NULL,
+            timestamp TIMESTAMPTZ NOT NULL,
+            chat_id BIGINT NOT NULL,
+            UNIQUE(scooter_number, accepted_by_user_id, timestamp)
+        )
+    ''')
+    await _pool.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON accepted_scooters (timestamp);")
+    await _pool.execute("CREATE INDEX IF NOT EXISTS idx_scooter ON accepted_scooters (scooter_number);")
+    await _pool.execute("CREATE INDEX IF NOT EXISTS idx_user_service ON accepted_scooters (accepted_by_user_id, service);")
+
+    await migrate_from_sqlite()
+
+async def migrate_from_sqlite():
+    if not os.path.exists("scooters.db"):
+        logging.info("Файл scooters.db не найден — миграция не требуется.")
+        return
+
+    try:
+        import aiosqlite  # временно для миграции
+        async with aiosqlite.connect("scooters.db") as db:
+            cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='accepted_scooters';")
+            exists = await cursor.fetchone()
+            if not exists:
+                return
+
+            cursor = await db.execute("SELECT id, scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id FROM accepted_scooters")
+            rows = await cursor.fetchall()
+            if not rows:
+                return
+
+            records = []
+            for row in rows:
+                ts = datetime.datetime.strptime(row[6], "%Y-%m-%d %H:%M:%S").replace(tzinfo=datetime.timezone(datetime.timedelta(hours=5)))
+                records.append((
+                    row[1], row[2], row[3], row[4], row[5], ts, row[7]
+                ))
+
+            async with _pool.acquire() as conn:
+                await conn.executemany('''
+                    INSERT INTO accepted_scooters 
+                    (scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    ON CONFLICT (scooter_number, accepted_by_user_id, timestamp) DO NOTHING
+                ''', records)
+        logging.info(f"✅ Мигрировано {len(records)} записей из SQLite в PostgreSQL.")
+        # Опционально: удалить файл после миграции
+        # os.remove("scooters.db")
+    except Exception as e:
+        logging.warning(f"⚠️ Ошибка при миграции из SQLite: {e}")
+
+async def db_execute(query: str, params: tuple = ()) -> int:
+    async with _pool.acquire() as conn:
+        result = await conn.execute(query, *params)
+        if result.startswith("INSERT") or result.startswith("UPDATE") or result.startswith("DELETE"):
+            return int(result.split()[-1])
+        return 0
+
+async def db_fetch_all(query: str, params: tuple = ()) -> list:
+    async with _pool.acquire() as conn:
+        return await conn.fetch(query, *params)
+
+async def db_write_batch(records_data: list[tuple]):
+    async with _pool.acquire() as conn:
+        await conn.executemany('''
+            INSERT INTO accepted_scooters 
+            (scooter_number, service, accepted_by_user_id, accepted_by_username, accepted_by_fullname, timestamp, chat_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (scooter_number, accepted_by_user_id, timestamp) DO NOTHING
+        ''', records_data)
